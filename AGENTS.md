@@ -40,7 +40,7 @@ Aynı veri her ekranda aynı sonucu vermeli. Yeni bir grafik ya da hesap eklerke
 - Set sayımı tek yerden geçer: `doneSets` (ısınma ve işaretlenmemiş setler sayılmaz). Ana kas 1, yardımcı kas 0,5 set.
 - Grafikler `src/charts.tsx` içindeki ortak bileşenlerle çizilir (`LineChart`, `BarChart`, `PartsBar`, `CalendarGrid`). Elle çubuk ya da eksen çizme.
 - Trend grafikleri ortak aralık seçiciyi kullanır (`RangePicker`, `useRangeWeeks`, `useRangeStart`). Seçim `settings.statsRange` içinde tutulur ve tüm ekranlarda aynıdır.
-- Vücut modeli `src/body3d.tsx` içinde elipsoidlerden kuruludur; hazır 3D model ya da 3D kütüphane eklenmez.
+- Vücut modeli `src/body3d.tsx` içindedir: gövde, kollar ve bacaklar elips kesitlerle tanımlı pürüzsüz parçalardır, kaslar bu yüzeyin üstündeki açı ve yükseklik aralıklarıdır. Hazır 3D model ya da 3D kütüphane eklenmez. Kasları ayrı yuvarlak şekillerle çizme; denendi ve kötü göründü.
 
 ## Navigation & Routing
 

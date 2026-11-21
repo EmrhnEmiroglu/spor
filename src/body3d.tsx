@@ -1,202 +1,419 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
+import Svg, { Defs, Ellipse, LinearGradient, Path, RadialGradient, Stop } from 'react-native-svg';
 import { MuscleId } from './types';
 import { C, heatColor } from './theme';
 
 /**
  * Döndürülebilir vücut modeli.
  *
- * Her kas bir ya da birkaç elipsoidden oluşur. Model dikey eksen etrafında döndürülür,
- * her elipsoidin ekrandaki izdüşümü bir elips olarak hesaplanır ve arkadan öne doğru
- * çizilir. Hazır 3D model ya da ek kütüphane kullanılmaz.
+ * Vücut beş pürüzsüz parçadan oluşur: gövde (baş dahil), iki kol, iki bacak. Her parça,
+ * yukarıdan aşağı dizilmiş elips kesitlerle tanımlanır. Model dikey eksen etrafında
+ * döndürüldüğünde her kesitin ekrandaki genişliği hesaplanır ve parçanın dış hattı çizilir.
  *
- * Eksenler: x sağa, y aşağı, z izleyiciye doğru. Model 0 derecede öne bakar.
- * Oranlar yaklaşık yedi buçuk baş boyundaki atletik bir vücuda göredir:
- * çene 46, omuz 68, göğüs ucu 98, göbek 152, kasık 206, diz 300, taban 400.
+ * Kaslar bu yüzeyin üstündeki bölgelerdir: bir yükseklik aralığı ve kesit çevresinde bir
+ * açı aralığı. Yüzeyle birlikte döner, arkaya geçince görünmez olur.
+ *
+ * Eksenler: x sağa, y aşağı, z izleyiciye doğru. Açı: 90 ön, 0 sağ yan, 180 sol yan, 270 arka.
+ * Hazır 3D model ya da 3D kütüphane kullanılmaz.
  */
 
-interface Part {
-  /** null: kas olmayan bölge (baş, eklem, gövde dolgusu). */
-  m: MuscleId | null;
-  c: [number, number, number];
-  r: [number, number, number];
-  /** Ön düzlemde eğim, derece. */
-  tilt?: number;
-  /** Öne ya da arkaya yatma, derece. */
-  lean?: number;
-  /** true ise şekil sol tarafa da aynalanır. */
-  mirror?: boolean;
+// ---------- Vücut parçaları ----------
+
+interface Key {
+  y: number;
+  /** Kesit merkezinin yana kayması. */
+  cx?: number;
+  /** Kesit merkezinin öne (+) ya da arkaya (-) kayması. */
+  cz?: number;
+  /** Yarı genişlik (x yönünde). */
+  rx: number;
+  /** Yarı derinlik (z yönünde). */
+  rz: number;
 }
 
-const PARTS: Part[] = [
-  // Baş ve boyun
-  { m: null, c: [0, 24, 2], r: [16, 22, 19] },
-  { m: null, c: [0, 52, -2], r: [10, 11, 10.5] },
+type SegName = 'trunk' | 'arm' | 'leg';
 
-  // Gövde dolgusu: kasların arasındaki boşlukları kapatır
-  { m: null, c: [0, 98, 0], r: [35, 36, 20] },
-  { m: null, c: [0, 148, 1], r: [28, 32, 16.5] },
-  { m: null, c: [0, 190, 0], r: [30, 21, 18] },
-
-  // Trapez: boyundan omuza inen kısım ve kürek kemikleri arası
-  { m: 'traps', c: [18, 63, -5], r: [19, 8.5, 11], tilt: 18, mirror: true },
-  { m: 'traps', c: [0, 89, -19.5], r: [13, 28, 6] },
-
-  // Omuz: ön, yan ve arka baş
-  { m: 'shoulders', c: [42, 77, 8], r: [10, 14, 9], mirror: true },
-  { m: 'shoulders', c: [49, 77, 0], r: [9.5, 15.5, 11], mirror: true },
-  { m: 'shoulders', c: [43, 78, -9], r: [10, 14, 9], mirror: true },
-
-  // Göğüs: üst ve alt
-  { m: 'chest', c: [19, 85, 15.5], r: [17, 9, 7.5], tilt: -12, mirror: true },
-  { m: 'chest', c: [17.5, 97, 17.5], r: [18.5, 12.5, 9], tilt: -4, mirror: true },
-
-  // Üst sırt ve kanat
-  { m: 'upperBack', c: [24, 91, -17.5], r: [15, 15, 8], mirror: true },
-  { m: 'lats', c: [30, 125, -11.5], r: [13, 28, 13], tilt: 10, mirror: true },
-
-  // Karın: dört sıra, alt karın ve yanlar
-  { m: 'abs', c: [8, 119, 17.5], r: [8, 8.6, 4.5], mirror: true },
-  { m: 'abs', c: [8, 135.5, 18.2], r: [8, 8.6, 4.5], mirror: true },
-  { m: 'abs', c: [7.8, 152, 18], r: [7.8, 8.6, 4.5], mirror: true },
-  { m: 'abs', c: [7.2, 168, 17], r: [7.2, 8.6, 4.5], mirror: true },
-  { m: 'abs', c: [0, 184, 14.5], r: [12, 10, 5] },
-  { m: 'abs', c: [25, 152, 8], r: [8, 26, 13], tilt: 5, mirror: true },
-
-  // Bel
-  { m: 'lowerBack', c: [9, 157, -15.5], r: [9, 23, 6], mirror: true },
-
-  // Kalça: ana kas ve üst yan kısım
-  { m: 'glutes', c: [16, 202, -13], r: [17, 18.5, 14], mirror: true },
-  { m: 'glutes', c: [24, 185, -8], r: [11, 11, 11], mirror: true },
-
-  // Üst kol: dolgu, ön kol kası ve arka kolun iki başı
-  { m: null, c: [54.5, 116, 0], r: [8, 25, 8], tilt: -7, mirror: true },
-  { m: 'biceps', c: [53.5, 114, 7], r: [8.5, 21, 8.5], tilt: -7, mirror: true },
-  { m: 'triceps', c: [52, 113, -7.5], r: [7.5, 24, 8], tilt: -7, mirror: true },
-  { m: 'triceps', c: [59, 109, -4], r: [6.5, 18, 7.5], tilt: -7, mirror: true },
-  { m: null, c: [59.5, 146, 0], r: [7.5, 8, 8], mirror: true },
-
-  // Ön kol ve el
-  { m: 'forearms', c: [64, 165, 1], r: [7.5, 20, 9], tilt: -6, mirror: true },
-  { m: 'forearms', c: [59.5, 168, 3], r: [6.5, 19, 8], tilt: -6, mirror: true },
-  { m: 'forearms', c: [65.5, 190, 2], r: [6, 14, 6.5], tilt: -5, mirror: true },
-  { m: null, c: [68, 216, 4], r: [6.5, 14, 5], tilt: -4, mirror: true },
-
-  // Üst bacak: dolgu, iç bacak, ön bacağın üç görünür başı, arka bacak
-  { m: null, c: [18, 250, 0], r: [14, 42, 12], tilt: 2, mirror: true },
-  { m: null, c: [7.5, 234, 0], r: [6.5, 24, 11], mirror: true },
-  { m: 'quads', c: [25, 249, 6], r: [9.5, 39, 11], tilt: 3, mirror: true },
-  { m: 'quads', c: [17, 245, 12], r: [9, 37, 8], tilt: 2, mirror: true },
-  { m: 'quads', c: [11.5, 273, 9], r: [7.5, 16, 8], mirror: true },
-  { m: 'hamstrings', c: [13.5, 252, -9], r: [8, 38, 10], tilt: 1, mirror: true },
-  { m: 'hamstrings', c: [23.5, 251, -8], r: [8.5, 38, 10.5], tilt: 3, mirror: true },
-
-  // Diz, alt bacak ve ayak
-  { m: null, c: [18, 300, 3], r: [10.5, 10, 11], mirror: true },
-  { m: null, c: [19, 338, 5], r: [8, 30, 8.5], mirror: true },
-  { m: 'calves', c: [13.5, 328, -8], r: [7, 23, 9], mirror: true },
-  { m: 'calves', c: [22.5, 326, -7], r: [7.5, 24, 9.5], mirror: true },
-  { m: null, c: [18, 363, -3], r: [6, 16, 6.5], mirror: true },
-  { m: null, c: [19, 392, 9], r: [9, 6.5, 17], mirror: true },
+const TRUNK: Key[] = [
+  { y: 3, rx: 2, rz: 2, cz: 2 },
+  { y: 8, rx: 10, rz: 12, cz: 2 },
+  { y: 16, rx: 14.5, rz: 17, cz: 2 },
+  { y: 26, rx: 15.5, rz: 18.5, cz: 2.5 },
+  { y: 36, rx: 14, rz: 17, cz: 3 },
+  { y: 43, rx: 11, rz: 13.5, cz: 3 },
+  { y: 49, rx: 8.6, rz: 9.5, cz: 0 },
+  { y: 55, rx: 9.4, rz: 10, cz: -1 },
+  { y: 59, rx: 13, rz: 10.6, cz: -1.5 },
+  { y: 63, rx: 20, rz: 12, cz: -1.2 },
+  { y: 67, rx: 27, rz: 14, cz: -0.8 },
+  { y: 72, rx: 32, rz: 16.5, cz: 0 },
+  { y: 78, rx: 35, rz: 18.5, cz: 0.6 },
+  { y: 86, rx: 36.6, rz: 20.4, cz: 1.2 },
+  { y: 94, rx: 36.5, rz: 21, cz: 1.5 },
+  { y: 108, rx: 34.5, rz: 20, cz: 1 },
+  { y: 124, rx: 31.5, rz: 18, cz: 0.5 },
+  { y: 140, rx: 29, rz: 16.5, cz: 0.5 },
+  { y: 152, rx: 28.2, rz: 16, cz: 0.5 },
+  { y: 166, rx: 29.5, rz: 17, cz: 0 },
+  { y: 180, rx: 32.5, rz: 19.5, cz: -1 },
+  { y: 194, rx: 34, rz: 21, cz: -2 },
+  { y: 204, rx: 31, rz: 19.5, cz: -1.5 },
+  { y: 212, rx: 22, rz: 15, cz: -0.5 },
+  { y: 218, rx: 9, rz: 9, cz: 0 },
 ];
 
-type Vec = [number, number, number];
+const ARM: Key[] = [
+  { y: 61, cx: 43, rx: 2.5, rz: 4, cz: 0 },
+  { y: 63, cx: 44.5, rx: 6.5, rz: 8.5, cz: 0 },
+  { y: 66, cx: 46, rx: 9.8, rz: 11.8, cz: 0 },
+  { y: 70, cx: 47.5, rx: 12, rz: 14, cz: 0 },
+  { y: 76, cx: 49, rx: 13.4, rz: 15.4, cz: 0 },
+  { y: 84, cx: 50.5, rx: 13.5, rz: 15.5, cz: 0 },
+  { y: 96, cx: 52, rx: 11.5, rz: 13.5, cz: 0 },
+  { y: 110, cx: 53.5, rx: 11.2, rz: 13.2, cz: 0.5 },
+  { y: 124, cx: 55, rx: 10.4, rz: 12, cz: 0.5 },
+  { y: 136, cx: 56.8, rx: 9, rz: 10, cz: 0 },
+  { y: 144, cx: 58.2, rx: 8.4, rz: 9, cz: 0 },
+  { y: 154, cx: 60, rx: 9.6, rz: 10.2, cz: 0.5 },
+  { y: 166, cx: 61.8, rx: 9.2, rz: 9.6, cz: 1 },
+  { y: 180, cx: 63.8, rx: 7.8, rz: 7.8, cz: 1.5 },
+  { y: 194, cx: 65.6, rx: 6.2, rz: 5.8, cz: 2 },
+  { y: 204, cx: 66.8, rx: 5.4, rz: 4.8, cz: 2.5 },
+  { y: 212, cx: 67.8, rx: 6.8, rz: 4.4, cz: 3 },
+  { y: 224, cx: 68.8, rx: 6.6, rz: 4.2, cz: 3.5 },
+  { y: 234, cx: 69, rx: 4.6, rz: 3.4, cz: 4 },
+  { y: 240, cx: 69, rx: 1.5, rz: 1.5, cz: 4 },
+];
 
-interface Solid {
-  m: MuscleId | null;
-  c: Vec;
-  /** Yerel eksen matrisinin satırları (dönüş × yarıçaplar). */
-  rows: [Vec, Vec, Vec];
+const LEG: Key[] = [
+  { y: 192, cx: 16, rx: 9, rz: 12, cz: -1 },
+  { y: 200, cx: 17, rx: 15.5, rz: 18, cz: -1 },
+  { y: 214, cx: 18, rx: 17, rz: 19, cz: 0 },
+  { y: 232, cx: 18.5, rx: 16.4, rz: 18.6, cz: 0.5 },
+  { y: 252, cx: 18.8, rx: 15, rz: 17, cz: 0.5 },
+  { y: 272, cx: 18.8, rx: 12.8, rz: 14.4, cz: 0.5 },
+  { y: 288, cx: 18.6, rx: 11, rz: 12.4, cz: 1 },
+  { y: 298, cx: 18.6, rx: 10.4, rz: 11.8, cz: 1.5 },
+  { y: 308, cx: 18.8, rx: 10, rz: 11.4, cz: 0 },
+  { y: 322, cx: 19.2, rx: 11, rz: 13.2, cz: -2 },
+  { y: 336, cx: 19.2, rx: 10.4, rz: 12.4, cz: -2 },
+  { y: 352, cx: 19, rx: 8.4, rz: 9.6, cz: -1 },
+  { y: 368, cx: 18.8, rx: 6.4, rz: 7, cz: 0 },
+  { y: 380, cx: 18.8, rx: 5.4, rz: 6.2, cz: 0.5 },
+  { y: 387, cx: 19, rx: 6.4, rz: 9.5, cz: 4 },
+  { y: 394, cx: 19.4, rx: 7.8, rz: 14.5, cz: 8 },
+  { y: 400, cx: 19.4, rx: 7.4, rz: 14, cz: 8.5 },
+  { y: 403, cx: 19.4, rx: 4, rz: 9, cz: 8.5 },
+];
+
+interface Slice {
+  y: number;
+  cx: number;
+  cz: number;
+  rx: number;
+  rz: number;
 }
 
-/** Ön-arka kalınlık çarpanı: yandan bakışta gövdenin fazla ince görünmemesi için. */
-const DEPTH = 1.36;
+const STEP = 2;
 
-const rad = (d: number) => (d * Math.PI) / 180;
+/** Anahtar kesitlerin arasını yumuşak eğriyle doldurur (Catmull-Rom). */
+function densify(keys: Key[], sign: 1 | -1): Slice[] {
+  const get = (k: Key) => [k.cx ?? 0, k.cz ?? 0, k.rx, k.rz];
+  const out: Slice[] = [];
+  const y0 = keys[0].y;
+  const y1 = keys[keys.length - 1].y;
+  let i = 0;
+  for (let y = y0; y <= y1 + 0.001; y += STEP) {
+    while (i < keys.length - 2 && y > keys[i + 1].y) i++;
+    const p1 = get(keys[i]);
+    const p2 = get(keys[i + 1]);
+    const p0 = get(keys[Math.max(0, i - 1)]);
+    const p3 = get(keys[Math.min(keys.length - 1, i + 2)]);
+    const t = Math.min(1, Math.max(0, (y - keys[i].y) / (keys[i + 1].y - keys[i].y)));
+    const v = p1.map((_, j) => {
+      const a = p0[j];
+      const b = p1[j];
+      const c = p2[j];
+      const d = p3[j];
+      return 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t * t + (-a + 3 * b - 3 * c + d) * t * t * t);
+    });
+    out.push({ y, cx: v[0] * sign, cz: v[1], rx: Math.max(0.6, v[2]), rz: Math.max(0.6, v[3]) });
+  }
+  return out;
+}
 
-function build(p: Part, sign: 1 | -1): Solid {
-  const t = rad((p.tilt ?? 0) * sign);
-  const l = rad(p.lean ?? 0);
-  const ct = Math.cos(t);
-  const st = Math.sin(t);
-  const cl = Math.cos(l);
-  const sl = Math.sin(l);
-  const [rx, ry] = p.r;
-  const rz = p.r[2] * DEPTH;
-  // A = Rz(tilt) · Rx(lean) · diag(r)
+interface Segment {
+  name: SegName;
+  sign: 1 | -1;
+  slices: Slice[];
+  /** Eşit derinlikte çizim sırası: bacaklar, gövde, kollar. */
+  order: number;
+}
+
+const SEGMENTS: Segment[] = [
+  { name: 'leg', sign: 1, slices: densify(LEG, 1), order: 0 },
+  { name: 'leg', sign: -1, slices: densify(LEG, -1), order: 0 },
+  { name: 'trunk', sign: 1, slices: densify(TRUNK, 1), order: 1 },
+  { name: 'arm', sign: 1, slices: densify(ARM, 1), order: 2 },
+  { name: 'arm', sign: -1, slices: densify(ARM, -1), order: 2 },
+];
+
+function sliceAt(slices: Slice[], y: number): Slice {
+  const f = (y - slices[0].y) / STEP;
+  const i = Math.max(0, Math.min(slices.length - 2, Math.floor(f)));
+  const t = Math.max(0, Math.min(1, f - i));
+  const a = slices[i];
+  const b = slices[i + 1];
   return {
-    m: p.m,
-    c: [p.c[0] * sign, p.c[1], p.c[2] * DEPTH],
-    rows: [
-      [ct * rx, -st * cl * ry, st * sl * rz],
-      [st * rx, ct * cl * ry, -ct * sl * rz],
-      [0, sl * ry, cl * rz],
-    ],
+    y,
+    cx: a.cx + (b.cx - a.cx) * t,
+    cz: a.cz + (b.cz - a.cz) * t,
+    rx: a.rx + (b.rx - a.rx) * t,
+    rz: a.rz + (b.rz - a.rz) * t,
   };
 }
 
-const SOLIDS: Solid[] = PARTS.flatMap((p) => (p.mirror ? [build(p, 1), build(p, -1)] : [build(p, 1)]));
+// ---------- Kas bölgeleri ----------
 
-interface Drawn {
-  key: number;
+type Shape = 'almond' | 'round' | 'block';
+const SHAPE_POW: Record<Shape, number> = { almond: 0.75, round: 0.42, block: 0.22 };
+
+interface Patch {
+  /** null: kas olmayan yüzey ayrıntısı (yüz). */
   m: MuscleId | null;
-  cx: number;
-  cy: number;
-  rx: number;
-  ry: number;
-  /** Elipsin eğimi, radyan. */
-  rot: number;
-  depth: number;
+  seg: SegName;
+  y0: number;
+  y1: number;
+  /** Bölgenin merkez açısı (derece), üstte ve altta. */
+  c0: number;
+  c1?: number;
+  /** En geniş yerindeki yarı açı genişliği (derece). */
+  hw: number;
+  /** Genişlik çarpanı, üstte ve altta. */
+  s0?: number;
+  s1?: number;
+  shape?: Shape;
+  /** Gövdede: sol tarafa da aynalanır. Kol ve bacakta parça zaten çifttir. */
+  mirror?: boolean;
 }
 
-/** Modeli verilen açıyla döndürüp arkadan öne sıralı elipslere çevirir. */
-function project(angle: number): Drawn[] {
+const PATCHES: Patch[] = [
+  // Yüz: yönün anlaşılması için
+  { m: null, seg: 'trunk', y0: 14, y1: 41, c0: 90, hw: 34, shape: 'round' },
+
+  // Göğüs
+  { m: 'chest', seg: 'trunk', y0: 72, y1: 111, c0: 60, c1: 63, hw: 27, s0: 0.92, s1: 1, shape: 'round', mirror: true },
+
+  // Karın: dört sıra, alt karın ve yan karın
+  { m: 'abs', seg: 'trunk', y0: 114, y1: 129, c0: 79.5, hw: 8.6, shape: 'block', mirror: true },
+  { m: 'abs', seg: 'trunk', y0: 131, y1: 146, c0: 79.5, hw: 8.6, shape: 'block', mirror: true },
+  { m: 'abs', seg: 'trunk', y0: 148, y1: 163, c0: 79.5, hw: 8.6, shape: 'block', mirror: true },
+  { m: 'abs', seg: 'trunk', y0: 165, y1: 181, c0: 80, hw: 8.2, shape: 'block', mirror: true },
+  { m: 'abs', seg: 'trunk', y0: 183, y1: 206, c0: 90, hw: 15, s0: 1, s1: 0.25, shape: 'round' },
+  { m: 'abs', seg: 'trunk', y0: 113, y1: 184, c0: 47, c1: 52, hw: 15, shape: 'almond', mirror: true },
+
+  // Trapez: önden görünen omuz eğimi, arkadan üst kısım ve kürek kemikleri arası
+  { m: 'traps', seg: 'trunk', y0: 57, y1: 72, c0: 68, c1: 52, hw: 20, shape: 'almond', mirror: true },
+  { m: 'traps', seg: 'trunk', y0: 54, y1: 78, c0: 285, c1: 312, hw: 26, shape: 'round', mirror: true },
+  { m: 'traps', seg: 'trunk', y0: 70, y1: 124, c0: 270, hw: 22, s0: 1, s1: 0.5, shape: 'almond' },
+
+  // Üst sırt, kanat ve bel
+  { m: 'upperBack', seg: 'trunk', y0: 79, y1: 112, c0: 314, hw: 20, shape: 'round', mirror: true },
+  { m: 'lats', seg: 'trunk', y0: 104, y1: 160, c0: 324, c1: 292, hw: 25, s0: 1, s1: 0.5, shape: 'round', mirror: true },
+  { m: 'lowerBack', seg: 'trunk', y0: 128, y1: 182, c0: 281, hw: 9.5, shape: 'block', mirror: true },
+
+  // Kalça
+  { m: 'glutes', seg: 'trunk', y0: 178, y1: 216, c0: 306, hw: 31, shape: 'round', mirror: true },
+
+  // Omuz: ön, yan ve arka baş
+  { m: 'shoulders', seg: 'arm', y0: 65, y1: 101, c0: 70, hw: 32, s0: 1, s1: 0.55, shape: 'round' },
+  { m: 'shoulders', seg: 'arm', y0: 63, y1: 103, c0: 0, hw: 34, s0: 1, s1: 0.5, shape: 'round' },
+  { m: 'shoulders', seg: 'arm', y0: 65, y1: 101, c0: 290, hw: 32, s0: 1, s1: 0.55, shape: 'round' },
+
+  // Üst kol
+  { m: 'biceps', seg: 'arm', y0: 100, y1: 145, c0: 100, hw: 44, shape: 'almond' },
+  { m: 'triceps', seg: 'arm', y0: 98, y1: 138, c0: 326, hw: 28, shape: 'almond' },
+  { m: 'triceps', seg: 'arm', y0: 100, y1: 143, c0: 255, hw: 35, shape: 'almond' },
+
+  // Ön kol
+  { m: 'forearms', seg: 'arm', y0: 138, y1: 188, c0: 25, hw: 30, shape: 'almond' },
+  { m: 'forearms', seg: 'arm', y0: 148, y1: 203, c0: 120, hw: 48, s0: 1, s1: 0.6, shape: 'almond' },
+  { m: 'forearms', seg: 'arm', y0: 148, y1: 203, c0: 300, hw: 50, s0: 1, s1: 0.6, shape: 'almond' },
+
+  // Ön bacak: dış, orta ve iç baş
+  { m: 'quads', seg: 'leg', y0: 218, y1: 294, c0: 35, hw: 27, shape: 'almond' },
+  { m: 'quads', seg: 'leg', y0: 214, y1: 292, c0: 92, hw: 26, shape: 'almond' },
+  { m: 'quads', seg: 'leg', y0: 248, y1: 298, c0: 148, hw: 24, s0: 0.55, s1: 1, shape: 'almond' },
+
+  // Arka bacak
+  { m: 'hamstrings', seg: 'leg', y0: 218, y1: 294, c0: 313, hw: 24, shape: 'almond' },
+  { m: 'hamstrings', seg: 'leg', y0: 218, y1: 294, c0: 248, hw: 26, shape: 'almond' },
+
+  // Baldır: dış ve iç baş
+  { m: 'calves', seg: 'leg', y0: 306, y1: 356, c0: 316, hw: 27, s0: 1, s1: 0.6, shape: 'round' },
+  { m: 'calves', seg: 'leg', y0: 306, y1: 360, c0: 238, hw: 28, s0: 1, s1: 0.6, shape: 'round' },
+];
+
+interface PatchRT {
+  m: MuscleId | null;
+  seg: number;
+  y0: number;
+  y1: number;
+  c0: number;
+  c1: number;
+  hw: number;
+  s0: number;
+  s1: number;
+  pow: number;
+}
+
+const rad = (d: number) => (d * Math.PI) / 180;
+
+const PATCH_RT: PatchRT[] = [];
+SEGMENTS.forEach((seg, si) => {
+  for (const p of PATCHES) {
+    if (p.seg !== seg.name) continue;
+    const base = {
+      m: p.m,
+      seg: si,
+      y0: p.y0,
+      y1: p.y1,
+      hw: rad(p.hw),
+      s0: p.s0 ?? 1,
+      s1: p.s1 ?? 1,
+      pow: SHAPE_POW[p.shape ?? 'almond'],
+    };
+    const c0 = p.c0;
+    const c1 = p.c1 ?? p.c0;
+    // Sol taraftaki parçada ve gövdenin aynalanan bölgelerinde açı yansıtılır.
+    if (seg.sign === 1) PATCH_RT.push({ ...base, c0: rad(c0), c1: rad(c1) });
+    if (seg.sign === -1 || p.mirror) PATCH_RT.push({ ...base, c0: rad(180 - c0), c1: rad(180 - c1) });
+  }
+});
+
+// ---------- İzdüşüm ----------
+
+type Pt = [number, number];
+
+interface DrawnPatch {
+  key: string;
+  m: MuscleId | null;
+  d: string;
+  poly: Pt[];
+}
+
+interface DrawnSegment {
+  key: number;
+  d: string;
+  poly: Pt[];
+  depth: number;
+  order: number;
+  patches: DrawnPatch[];
+}
+
+const TWO_PI = Math.PI * 2;
+
+/** Açıyı (-pi, pi] aralığına indirger. */
+function wrap(a: number): number {
+  let x = a % TWO_PI;
+  if (x > Math.PI) x -= TWO_PI;
+  if (x <= -Math.PI) x += TWO_PI;
+  return x;
+}
+
+function pathOf(left: Pt[], right: Pt[]): { d: string; poly: Pt[] } {
+  const poly = [...left, ...[...right].reverse()];
+  const d = poly.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('') + 'Z';
+  return { d, poly };
+}
+
+/** Modeli verilen açıyla döndürüp çizilecek parçaları, arkadan öne sıralı olarak verir. */
+function project(angle: number): DrawnSegment[] {
   const cs = Math.cos(angle);
   const sn = Math.sin(angle);
-  const dot = (a: Vec, b: Vec) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
-  const out = SOLIDS.map((s, key) => {
-    // Dönüşten sonra ekran x satırı: cos·satır0 + sin·satır2. y satırı değişmez.
-    const r0: Vec = [
-      cs * s.rows[0][0] + sn * s.rows[2][0],
-      cs * s.rows[0][1] + sn * s.rows[2][1],
-      cs * s.rows[0][2] + sn * s.rows[2][2],
-    ];
-    const r1 = s.rows[1];
-    const a = dot(r0, r0);
-    const b = dot(r0, r1);
-    const c = dot(r1, r1);
-    const mid = (a + c) / 2;
-    const dev = Math.sqrt(((a - c) / 2) * ((a - c) / 2) + b * b);
-    return {
-      key,
-      m: s.m,
-      cx: s.c[0] * cs + s.c[2] * sn,
-      cy: s.c[1],
-      rx: Math.sqrt(Math.max(0.01, mid + dev)),
-      ry: Math.sqrt(Math.max(0.01, mid - dev)),
-      rot: 0.5 * Math.atan2(2 * b, a - c),
-      depth: -s.c[0] * sn + s.c[2] * cs,
-    };
+
+  const out: DrawnSegment[] = SEGMENTS.map((seg, key) => {
+    const left: Pt[] = [];
+    const right: Pt[] = [];
+    let depth = 0;
+    for (const s of seg.slices) {
+      const x = s.cx * cs + s.cz * sn;
+      const w = Math.sqrt(s.rx * s.rx * cs * cs + s.rz * s.rz * sn * sn);
+      left.push([x - w, s.y]);
+      right.push([x + w, s.y]);
+      depth += -s.cx * sn + s.cz * cs;
+    }
+    return { key, ...pathOf(left, right), depth: depth / seg.slices.length, order: seg.order, patches: [] };
   });
-  return out.sort((p, q) => p.depth - q.depth);
+
+  PATCH_RT.forEach((p, pi) => {
+    const seg = SEGMENTS[p.seg];
+    let left: Pt[] = [];
+    let right: Pt[] = [];
+    let run = 0;
+    const flush = () => {
+      if (left.length >= 2) out[p.seg].patches.push({ key: `${pi}-${run++}`, m: p.m, ...pathOf(left, right) });
+      left = [];
+      right = [];
+    };
+    const n = Math.max(4, Math.ceil((p.y1 - p.y0) / 2.5));
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const s = sliceAt(seg.slices, p.y0 + (p.y1 - p.y0) * t);
+      const x = s.cx * cs + s.cz * sn;
+      const w = Math.sqrt(s.rx * s.rx * cs * cs + s.rz * s.rz * sn * sn);
+      // Kesitin görünen yarısı, alfa açısından başlayan yarım turdur.
+      const alpha = Math.atan2(s.rz * sn, s.rx * cs);
+      const half = p.hw * (p.s0 + (p.s1 - p.s0) * t) * Math.pow(Math.sin(Math.PI * t), p.pow);
+      const c = p.c0 + (p.c1 - p.c0) * t;
+      const u1 = wrap(c - half - alpha);
+      const lo = Math.max(u1, 0);
+      const hi = Math.min(u1 + 2 * half, Math.PI);
+      if (hi - lo < 0.012) {
+        // Uçlarda bölge sıfıra iner; görünen kısımdaysa sivri uç olarak eklenir.
+        if (half < 0.012 && u1 > 0 && u1 < Math.PI) {
+          const px = x + w * Math.cos(u1);
+          left.push([px, s.y]);
+          right.push([px, s.y]);
+        } else {
+          flush();
+        }
+        continue;
+      }
+      left.push([x + w * Math.cos(hi), s.y]);
+      right.push([x + w * Math.cos(lo), s.y]);
+    }
+    flush();
+  });
+
+  // Çizim sırası: bacaklar her zaman gövdenin altında kalır (kalça birleşimi kapanır).
+  // Kollardan gövdenin arkasında kalan önce, diğerleri gövdeden sonra çizilir.
+  const trunkDepth = out[2].depth;
+  const rank = (s: DrawnSegment) => {
+    if (s.order === 0) return 0;
+    if (s.order === 1) return 2;
+    return s.depth < trunkDepth - 3 ? 1 : 3;
+  };
+  return out.sort((a, b) => rank(a) - rank(b) || a.depth - b.depth);
 }
 
-/** Derinliğe göre karartma: arkadaki şekiller biraz daha koyu görünür. */
-function shade(hex: string, k: number): string {
-  const n = parseInt(hex.slice(1), 16);
-  const ch = (v: number) => Math.round(Math.max(0, Math.min(255, v * k)));
-  const r = ch((n >> 16) & 255);
-  const g = ch((n >> 8) & 255);
-  const b = ch(n & 255);
-  return `rgb(${r},${g},${b})`;
+function inside(poly: Pt[], x: number, y: number): boolean {
+  let hit = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+  }
+  return hit;
 }
 
-const NEUTRAL = '#32322f';
+// ---------- Görünüm ----------
+
+const SKIN = '#34342f';
+const FACE = '#3a3a35';
+const LINE = '#151514';
 const VIEW_W = 176;
-const VIEW_H = 412;
-const TWO_PI = Math.PI * 2;
+const VIEW_H = 414;
 
 function facing(angle: number): string {
   const a = ((angle % TWO_PI) + TWO_PI) % TWO_PI;
@@ -266,19 +483,17 @@ export function Body3D({
     const k = VIEW_W / size.w;
     const vx = lx * k - VIEW_W / 2;
     const vy = ly * k;
+    // Önden arkaya: dokunulan noktadaki en öndeki parça belirleyicidir.
     for (let i = drawn.length - 1; i >= 0; i--) {
-      const d = drawn[i];
-      const dx = vx - d.cx;
-      const dy = vy - d.cy;
-      const c = Math.cos(-d.rot);
-      const s = Math.sin(-d.rot);
-      const u = (dx * c - dy * s) / d.rx;
-      const v = (dx * s + dy * c) / d.ry;
-      if (u * u + v * v <= 1) {
-        // En öndeki şekil kas değilse arkasında kalan kas seçilmez.
-        if (d.m) onSelect(d.m);
-        return;
+      const seg = drawn[i];
+      for (let j = seg.patches.length - 1; j >= 0; j--) {
+        const p = seg.patches[j];
+        if (p.m && inside(p.poly, vx, vy)) {
+          onSelect(p.m);
+          return;
+        }
       }
+      if (inside(seg.poly, vx, vy)) return;
     }
   };
 
@@ -288,46 +503,44 @@ export function Body3D({
   return (
     <View style={{ alignItems: 'center', gap: 10 }}>
       <View
-        style={{ width: '100%', maxWidth: 250, aspectRatio: VIEW_W / VIEW_H }}
+        style={{ width: '100%', maxWidth: 260, aspectRatio: VIEW_W / VIEW_H }}
         onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
       >
         <Svg viewBox={`${-VIEW_W / 2} 0 ${VIEW_W} ${VIEW_H}`} width="100%" height="100%">
           <Defs>
-            {/* Her şeklin üstüne binen ışık: sol üstte parlak, kenarlarda koyu. Küre hissini verir. */}
-            <RadialGradient id="bodyLight" cx="36%" cy="30%" r="78%">
-              <Stop offset="0" stopColor="#ffffff" stopOpacity={0.22} />
-              <Stop offset="0.45" stopColor="#ffffff" stopOpacity={0} />
-              <Stop offset="0.62" stopColor="#000000" stopOpacity={0} />
-              <Stop offset="1" stopColor="#000000" stopOpacity={0.4} />
-            </RadialGradient>
+            {/* Parçanın kenarlarını karartıp ortasını aydınlatarak silindir hacmi verir. */}
+            <LinearGradient id="bodyRound" x1="0" y1="0" x2="1" y2="0">
+              <Stop offset="0" stopColor="#000000" stopOpacity={0.5} />
+              <Stop offset="0.28" stopColor="#000000" stopOpacity={0.06} />
+              <Stop offset="0.45" stopColor="#ffffff" stopOpacity={0.09} />
+              <Stop offset="0.7" stopColor="#000000" stopOpacity={0.05} />
+              <Stop offset="1" stopColor="#000000" stopOpacity={0.48} />
+            </LinearGradient>
             <RadialGradient id="bodyGround" cx="50%" cy="50%" r="50%">
               <Stop offset="0" stopColor="#000000" stopOpacity={0.55} />
               <Stop offset="1" stopColor="#000000" stopOpacity={0} />
             </RadialGradient>
           </Defs>
-          <Ellipse cx={0} cy={400} rx={62} ry={9} fill="url(#bodyGround)" />
-          {drawn.map((d) => {
-            const on = d.m != null && d.m === selected;
-            const base = d.m ? heatColor(values[d.m] ?? 0) : NEUTRAL;
-            const k = 0.8 + 0.2 * Math.max(0, Math.min(1, (d.depth + 26) / 52));
-            const tf = `rotate(${(d.rot * 180) / Math.PI} ${d.cx} ${d.cy})`;
-            return (
-              <React.Fragment key={d.key}>
-                <Ellipse cx={d.cx} cy={d.cy} rx={d.rx} ry={d.ry} fill={shade(base, k)} transform={tf} />
-                <Ellipse
-                  cx={d.cx}
-                  cy={d.cy}
-                  rx={d.rx}
-                  ry={d.ry}
-                  fill="url(#bodyLight)"
-                  stroke={on ? '#ffffff' : '#000000'}
-                  strokeOpacity={on ? 1 : 0.28}
-                  strokeWidth={on ? 1.6 : 0.5}
-                  transform={tf}
-                />
-              </React.Fragment>
-            );
-          })}
+          <Ellipse cx={0} cy={403} rx={60} ry={8} fill="url(#bodyGround)" />
+          {drawn.map((seg) => (
+            <React.Fragment key={seg.key}>
+              <Path d={seg.d} fill={SKIN} stroke={LINE} strokeWidth={1.2} strokeLinejoin="round" />
+              {seg.patches.map((p) => {
+                const on = p.m != null && p.m === selected;
+                return (
+                  <Path
+                    key={p.key}
+                    d={p.d}
+                    fill={p.m ? heatColor(values[p.m] ?? 0) : FACE}
+                    stroke={on ? '#ffffff' : LINE}
+                    strokeWidth={on ? 1.5 : 0.9}
+                    strokeLinejoin="round"
+                  />
+                );
+              })}
+              <Path d={seg.d} fill="url(#bodyRound)" />
+            </React.Fragment>
+          ))}
         </Svg>
         <View
           style={[{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 }, { touchAction: 'pan-y', cursor: 'grab' } as any]}

@@ -6,7 +6,10 @@ import { DBProvider, useDB } from './src/store';
 import { NavProvider, StackItem, TabId, useNav } from './src/nav';
 import { DialogProvider, Icon, IconName, useNow } from './src/ui';
 import { C } from './src/theme';
-import { fmtMinutes, workoutStats } from './src/logic';
+import { fmtClock, fmtMinutes, workoutStats } from './src/logic';
+import { TimerProvider, useRestState } from './src/timer';
+import { PlatesScreen, SwapScreen } from './src/screens/Tools';
+import { CardioScreen, MuscleTargetsScreen } from './src/screens/Extras';
 import { WorkoutTab } from './src/screens/WorkoutTab';
 import { HistoryTab, WorkoutDetailScreen } from './src/screens/HistoryTab';
 import { MusclesTab } from './src/screens/MusclesTab';
@@ -41,6 +44,14 @@ function renderRoute(r: StackItem) {
       return <ExerciseProgressScreen exerciseId={r.exerciseId} />;
     case 'settings':
       return <SettingsScreen />;
+    case 'swap':
+      return <SwapScreen workoutId={r.workoutId} entryIndex={r.entryIndex} />;
+    case 'plates':
+      return <PlatesScreen weight={r.weight} />;
+    case 'muscleTargets':
+      return <MuscleTargetsScreen />;
+    case 'cardio':
+      return <CardioScreen id={r.id} date={r.date} />;
   }
 }
 
@@ -48,8 +59,10 @@ function ActiveBanner() {
   const { db } = useDB();
   const nav = useNav();
   const now = useNow(30000);
+  const rest = useRestState();
   if (!db.active || nav.tab === 'workout') return null;
   const s = workoutStats(db.active, now);
+  const restText = rest.remaining == null ? '' : rest.finished ? ' · Dinlenme bitti' : ` · Dinlenme ${fmtClock(rest.remaining)}`;
   return (
     <Pressable
       onPress={() => nav.push({ name: 'editor', workoutId: null })}
@@ -65,6 +78,7 @@ function ActiveBanner() {
       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: C.good }} />
       <Text style={{ color: C.text, fontSize: 14, fontWeight: '600', flex: 1 }} numberOfLines={1}>
         {db.active.name} · {fmtMinutes(s.minutes)}
+        {restText}
       </Text>
       <Text style={{ color: C.text, fontSize: 14, fontWeight: '600' }}>Devam et</Text>
       <Icon name="chevron-right" size={16} color={C.text} />
@@ -138,11 +152,13 @@ export default function App() {
     <SafeAreaProvider>
       <StatusBar style="light" />
       <DBProvider>
-        <NavProvider>
-          <DialogProvider>
-            <Root />
-          </DialogProvider>
-        </NavProvider>
+        <TimerProvider>
+          <NavProvider>
+            <DialogProvider>
+              <Root />
+            </DialogProvider>
+          </NavProvider>
+        </TimerProvider>
       </DBProvider>
     </SafeAreaProvider>
   );

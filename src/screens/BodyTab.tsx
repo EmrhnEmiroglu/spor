@@ -1,22 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { useDB } from '../store';
-import { Btn, Card, Chip, Empty, IconBtn, NumInput, Screen, SectionTitle, Segmented, StatTile, T, useDialog } from '../ui';
+import { Btn, Card, Chip, DatePicker, Empty, IconBtn, NumInput, Screen, SectionTitle, Segmented, StatTile, T, useDialog } from '../ui';
 import { C } from '../theme';
 import { LineChart } from '../charts';
 import { MEASURES } from '../data/muscles';
 import { MeasureId } from '../types';
-import { addDays, dayNumber, daysAgo, fmtDate, fmtDayNumber, fmtNum, movingAverage, relDay, todayStr } from '../logic';
-
-function DatePicker({ date, onChange }: { date: string; onChange: (d: string) => void }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-      <IconBtn name="chevron-left" label="Önceki gün" onPress={() => onChange(addDays(date, -1))} />
-      <T v="body" style={{ fontWeight: '600' }}>{date === todayStr() ? 'Bugün' : fmtDate(date, 'long')}</T>
-      <IconBtn name="chevron-right" label="Sonraki gün" disabled={date >= todayStr()} onPress={() => onChange(addDays(date, 1))} />
-    </View>
-  );
-}
+import { addDays, dayNumber, daysAgo, fmtDate, fmtDayNumber, fmtNum, movingAverage, relDay, todayStr, trendPerDay } from '../logic';
 
 function signed(n: number): string {
   return `${n > 0 ? '+' : n < 0 ? '−' : ''}${fmtNum(Math.abs(n), 1)}`;
@@ -48,6 +38,22 @@ function WeightSection() {
   const past = [...avg].reverse().find((p) => daysAgo(p.date) >= 28);
   const change = latestAvg && past ? latestAvg.value - past.value : null;
 
+  const goal = db.settings.goalWeight;
+  const slope = useMemo(() => trendPerDay(avg), [avg]);
+  const remaining = goal != null && latestAvg ? goal - latestAvg.value : null;
+  const goalText = (() => {
+    if (remaining == null) return null;
+    if (Math.abs(remaining) < 0.2) return 'Hedefe ulaştın.';
+    if (slope == null) return 'Tahmin için en az bir haftaya yayılmış üç tartı gerekli.';
+    const weekly = slope * 7;
+    if (Math.abs(weekly) < 0.03 || slope * remaining <= 0) {
+      return `Son haftalardaki gidiş hedefe doğru değil. Haftalık değişim ${signed(weekly)} kg.`;
+    }
+    const days = Math.ceil(remaining / slope);
+    if (days > 730) return `Haftalık değişim ${signed(weekly)} kg. Bu hızla hedef iki yıldan uzun sürer.`;
+    return `Haftalık değişim ${signed(weekly)} kg. Bu hızla tahmini varış ${fmtDate(addDays(todayStr(), days), 'long')}.`;
+  })();
+
   return (
     <>
       <Card style={{ gap: 10 }}>
@@ -57,6 +63,24 @@ function WeightSection() {
           <T v="small">kg</T>
           <Btn label="Kaydet" onPress={save} style={{ minWidth: 110 }} />
         </View>
+      </Card>
+
+      <Card style={{ gap: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <T v="label" style={{ flex: 1 }}>Hedef kilo</T>
+          <NumInput
+            value={goal}
+            onChange={(n) => update((d) => void (d.settings.goalWeight = n != null && n > 0 ? n : null))}
+            placeholder="Yok"
+            style={{ width: 96 }}
+          />
+          <T v="small">kg</T>
+        </View>
+        {remaining != null && Math.abs(remaining) >= 0.2 ? (
+          <T v="body" style={{ fontWeight: '600' }}>Hedefe {fmtNum(Math.abs(remaining), 1)} kg kaldı</T>
+        ) : null}
+        {goalText ? <T v="small" style={{ lineHeight: 19 }}>{goalText}</T> : null}
+        {goal == null ? <T v="tiny">Hedef girersen mevcut gidişle tahmini varış tarihi hesaplanır.</T> : null}
       </Card>
 
       {logs.length === 0 ? (
@@ -72,6 +96,7 @@ function WeightSection() {
             <LineChart
               unit="kg"
               formatX={fmtDayNumber}
+              refLine={goal != null && goal >= 30 ? { y: goal, label: `Hedef ${fmtNum(goal, 1)}` } : undefined}
               series={[
                 {
                   key: 'avg',

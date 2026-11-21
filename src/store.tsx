@@ -16,7 +16,21 @@ export function emptyDB(): DB {
     active: null,
     weights: [],
     measures: [],
-    settings: { increment: 2.5, lastBackupAt: null },
+    cardio: [],
+    exerciseNotes: {},
+    settings: {
+      increment: 2.5,
+      lastBackupAt: null,
+      restEnabled: true,
+      restSeconds: 120,
+      restSound: true,
+      trackRir: true,
+      weeklyGoal: 4,
+      goalWeight: null,
+      barWeight: 20,
+      plates: [25, 20, 15, 10, 5, 2.5, 1.25],
+      muscleTargets: {},
+    },
   };
 }
 
@@ -34,6 +48,8 @@ export function normalizeDB(raw: unknown): DB | null {
     active: r.active && typeof r.active === 'object' ? r.active : null,
     weights: arr(r.weights, base.weights),
     measures: arr(r.measures, base.measures),
+    cardio: arr(r.cardio, base.cardio),
+    exerciseNotes: r.exerciseNotes && typeof r.exerciseNotes === 'object' ? r.exerciseNotes : {},
     settings: { ...base.settings, ...(r.settings ?? {}) },
   };
 }

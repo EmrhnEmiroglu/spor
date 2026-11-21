@@ -11,7 +11,11 @@ export type Route =
   | { name: 'dayEdit'; dayId: string }
   | { name: 'workoutDetail'; id: string }
   | { name: 'exerciseProgress'; exerciseId: string }
-  | { name: 'settings' };
+  | { name: 'settings' }
+  | { name: 'swap'; workoutId: string | null; entryIndex: number }
+  | { name: 'plates'; weight: number | null }
+  | { name: 'muscleTargets' }
+  | { name: 'cardio'; id: string | null; date: string };
 
 export type StackItem = Route & { key: string };
 export type TabId = 'workout' | 'history' | 'muscles' | 'progress' | 'body';

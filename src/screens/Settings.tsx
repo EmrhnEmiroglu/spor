@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { Platform, View } from 'react-native';
 import { emptyDB, useDB } from '../store';
 import { useNav } from '../nav';
-import { Btn, Card, Chip, Field, Screen, SectionTitle, T, useDialog } from '../ui';
+import { Btn, Card, Chip, Field, Screen, SectionTitle, Stepper, T, ToggleRow, useDialog } from '../ui';
 import { exportBackup, parseBackup, pickBackupFile } from '../backup';
-import { fmtDate, fmtNum, toDateStr } from '../logic';
+import { fmtClock, fmtDate, fmtNum, toDateStr } from '../logic';
 import { DB } from '../types';
 
 export function SettingsScreen() {
@@ -68,6 +68,50 @@ export function SettingsScreen() {
 
   return (
     <Screen title="Ayarlar" onBack={nav.pop} overlay>
+      <SectionTitle>Haftalık hedef</SectionTitle>
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <View style={{ flex: 1 }}>
+          <T v="body">Haftada antrenman</T>
+          <T v="tiny" style={{ marginTop: 2, lineHeight: 16 }}>Ana ekrandaki sayaç ve seri bu hedefe göre hesaplanır.</T>
+        </View>
+        <Stepper value={db.settings.weeklyGoal} min={1} max={7} onChange={(n) => update((d) => void (d.settings.weeklyGoal = n))} />
+      </Card>
+
+      <SectionTitle>Dinlenme sayacı</SectionTitle>
+      <Card style={{ gap: 10 }}>
+        <ToggleRow
+          label="Set bitince sayacı başlat"
+          value={db.settings.restEnabled}
+          onChange={(v) => update((d) => void (d.settings.restEnabled = v))}
+        />
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {[60, 90, 120, 150, 180, 240].map((n) => (
+            <Chip
+              key={n}
+              label={fmtClock(n)}
+              selected={db.settings.restSeconds === n}
+              onPress={() => update((d) => void (d.settings.restSeconds = n))}
+            />
+          ))}
+        </View>
+        <ToggleRow
+          label="Süre dolunca ses çal"
+          hint="Telefon sessizdeyken ve ekran kilitliyken ses çıkmaz."
+          value={db.settings.restSound}
+          onChange={(v) => update((d) => void (d.settings.restSound = v))}
+        />
+      </Card>
+
+      <SectionTitle>Set zorluğu</SectionTitle>
+      <Card>
+        <ToggleRow
+          label="Set sonunda zorluğu sor"
+          hint="Kaç tekrar daha çıkaracağını girersen kilo artırma önerisi daha isabetli olur."
+          value={db.settings.trackRir}
+          onChange={(v) => update((d) => void (d.settings.trackRir = v))}
+        />
+      </Card>
+
       <SectionTitle>Kilo artış adımı</SectionTitle>
       <Card style={{ gap: 10 }}>
         <T v="small" style={{ lineHeight: 19 }}>
@@ -114,7 +158,7 @@ export function SettingsScreen() {
           {db.workouts.length} antrenman · {db.days.length} program günü · {db.customExercises.length} özel egzersiz
         </T>
         <T v="small">
-          {db.weights.length} kilo kaydı · {db.measures.length} ölçü kaydı
+          {db.weights.length} kilo kaydı · {db.measures.length} ölçü kaydı · {db.cardio.length} kardiyo kaydı
         </T>
         <Btn label="Tüm verileri sil" kind="danger" onPress={wipe} style={{ marginTop: 8 }} />
       </Card>

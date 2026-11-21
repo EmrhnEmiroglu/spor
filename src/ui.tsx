@@ -14,7 +14,7 @@ import {
 import Svg, { Path } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C } from './theme';
-import { fmtNum, parseNum } from './logic';
+import { addDays, fmtDate, fmtNum, parseNum, todayStr } from './logic';
 
 // ---------- Metin ----------
 
@@ -80,6 +80,12 @@ const ICONS = {
   info: [circ(12, 12, 10), 'M12 16v-4', 'M12 8h.01'],
   'arrow-up': ['M12 19V5', 'M5 12l7-7 7 7'],
   'arrow-down': ['M12 5v14', 'M19 12l-7 7-7-7'],
+  repeat: ['M17 1l4 4-4 4', 'M3 11V9a4 4 0 0 1 4-4h14', 'M7 23l-4-4 4-4', 'M21 13v2a4 4 0 0 1-4 4H3'],
+  target: [circ(12, 12, 10), circ(12, 12, 6), circ(12, 12, 2)],
+  disc: [circ(12, 12, 10), circ(12, 12, 3)],
+  heart: [
+    'M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z',
+  ],
 } as const;
 
 export type IconName = keyof typeof ICONS;
@@ -305,6 +311,46 @@ export function Stepper({
         <Text style={{ color: C.text, fontSize: 15, fontWeight: '600', minWidth: 26, textAlign: 'center' }}>{fmtNum(value)}</Text>
         {b(1, 'plus')}
       </View>
+    </View>
+  );
+}
+
+/** Aç/kapa anahtarı olan ayar satırı. */
+export function ToggleRow({ label, hint, value, onChange }: { label: string; hint?: string; value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <Pressable
+      onPress={() => onChange(!value)}
+      accessibilityRole="switch"
+      accessibilityState={{ checked: value }}
+      style={[{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 44 }, noSelect]}
+    >
+      <View style={{ flex: 1 }}>
+        <T v="body">{label}</T>
+        {hint ? <T v="tiny" style={{ marginTop: 2, lineHeight: 16 }}>{hint}</T> : null}
+      </View>
+      <View
+        style={{
+          width: 48,
+          height: 28,
+          borderRadius: 14,
+          padding: 3,
+          backgroundColor: value ? C.accent : C.surface3,
+          alignItems: value ? 'flex-end' : 'flex-start',
+        }}
+      >
+        <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#ffffff' }} />
+      </View>
+    </Pressable>
+  );
+}
+
+/** Gün seçici: bugünden ileri gidilemez. */
+export function DatePicker({ date, onChange }: { date: string; onChange: (d: string) => void }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+      <IconBtn name="chevron-left" label="Önceki gün" onPress={() => onChange(addDays(date, -1))} />
+      <T v="body" style={{ fontWeight: '600' }}>{date === todayStr() ? 'Bugün' : fmtDate(date, 'long')}</T>
+      <IconBtn name="chevron-right" label="Sonraki gün" disabled={date >= todayStr()} onPress={() => onChange(addDays(date, 1))} />
     </View>
   );
 }

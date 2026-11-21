@@ -30,6 +30,8 @@ export const EQUIPMENT: { id: Equipment; name: string }[] = [
 
 export const EQUIPMENT_NAME = Object.fromEntries(EQUIPMENT.map((m) => [m.id, m.name])) as Record<Equipment, string>;
 
+export const CARDIO_KINDS = ['Koşu', 'Yürüyüş', 'Bisiklet', 'Eliptik', 'Kürek', 'Yüzme', 'İp atlama', 'Diğer'];
+
 export const MEASURES: { id: MeasureId; name: string }[] = [
   { id: 'waist', name: 'Bel' },
   { id: 'chest', name: 'Göğüs' },

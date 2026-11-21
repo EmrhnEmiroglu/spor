@@ -4,7 +4,7 @@ import { useDB, useExercises } from '../store';
 import { useNav } from '../nav';
 import { Btn, Card, Empty, Icon, IconBtn, Screen, SectionTitle, StatTile, T, useDialog } from '../ui';
 import { C } from '../theme';
-import { Exercise, Workout } from '../types';
+import { CardioLog, Exercise, Workout } from '../types';
 import {
   MONTHS,
   buildSessions,
@@ -13,6 +13,7 @@ import {
   fmtInt,
   fmtMinutes,
   fmtNum,
+  fmtRir,
   sessionsBefore,
   sortWorkouts,
   toDateStr,
@@ -51,6 +52,24 @@ export function WorkoutRow({ w, map, onPress }: { w: Workout; map: Map<string, E
   );
 }
 
+export function CardioRow({ c, onPress }: { c: CardioLog; onPress: () => void }) {
+  return (
+    <Card onPress={onPress}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <Icon name="heart" size={18} color={C.text2} />
+        <View style={{ flex: 1, gap: 3 }}>
+          <T v="h2" numberOfLines={1}>{c.kind}</T>
+          <T v="small" numberOfLines={1}>
+            {fmtDate(c.date, 'full')} · {c.minutes} dk
+            {c.km ? ` · ${fmtNum(c.km, 2)} km` : ''}
+          </T>
+        </View>
+        <Icon name="chevron-right" color={C.muted} />
+      </View>
+    </Card>
+  );
+}
+
 export function HistoryTab() {
   const { db, update } = useDB();
   const nav = useNav();
@@ -69,7 +88,20 @@ export function HistoryTab() {
     return m;
   }, [db.workouts]);
 
-  const sorted = useMemo(() => sortWorkouts(db.workouts).reverse(), [db.workouts]);
+  const cardioByDate = useMemo(() => {
+    const m = new Map<string, CardioLog[]>();
+    for (const c of db.cardio) m.set(c.date, [...(m.get(c.date) ?? []), c]);
+    return m;
+  }, [db.cardio]);
+
+  // Antrenmanlar ve kardiyo kayıtları tek listede, yeniden eskiye.
+  const sorted = useMemo(() => {
+    const items: ({ t: 'w'; date: string; w: Workout } | { t: 'c'; date: string; c: CardioLog })[] = [
+      ...sortWorkouts(db.workouts).map((w) => ({ t: 'w' as const, date: w.date, w })),
+      ...db.cardio.map((c) => ({ t: 'c' as const, date: c.date, c })),
+    ];
+    return items.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  }, [db.workouts, db.cardio]);
 
   const first = new Date(ym.y, ym.m, 1);
   const offset = (first.getDay() + 6) % 7;
@@ -96,6 +128,7 @@ export function HistoryTab() {
   };
 
   const selWorkouts = byDate.get(sel) ?? [];
+  const selCardio = cardioByDate.get(sel) ?? [];
 
   return (
     <Screen title="Geçmiş">
@@ -121,6 +154,7 @@ export function HistoryTab() {
           {cells.map((date, i) => {
             if (!date) return <View key={'b' + i} style={{ width: `${100 / 7}%`, height: 44 }} />;
             const has = byDate.has(date);
+            const hasCardio = cardioByDate.has(date);
             const future = date > today;
             const isSel = date === sel;
             return (
@@ -151,10 +185,25 @@ export function HistoryTab() {
                   >
                     {Number(date.slice(8))}
                   </Text>
+                  {hasCardio ? (
+                    <View
+                      style={{ position: 'absolute', bottom: 3, width: 5, height: 5, borderRadius: 3, backgroundColor: has ? C.onAccent : C.text2 }}
+                    />
+                  ) : null}
                 </View>
               </Pressable>
             );
           })}
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, justifyContent: 'center' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: C.accent }} />
+            <T v="tiny">Antrenman</T>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: C.text2 }} />
+            <T v="tiny">Kardiyo</T>
+          </View>
         </View>
       </Card>
 
@@ -162,16 +211,32 @@ export function HistoryTab() {
       {selWorkouts.map((w) => (
         <WorkoutRow key={w.id} w={w} map={map} onPress={() => nav.push({ name: 'workoutDetail', id: w.id })} />
       ))}
-      {selWorkouts.length === 0 ? <T v="small">Bu günde kayıtlı antrenman yok.</T> : null}
-      <Btn label="Bu güne antrenman ekle" icon="plus" kind="secondary" onPress={addPast} />
+      {selCardio.map((c) => (
+        <CardioRow key={c.id} c={c} onPress={() => nav.push({ name: 'cardio', id: c.id, date: c.date })} />
+      ))}
+      {selWorkouts.length === 0 && selCardio.length === 0 ? <T v="small">Bu günde kayıt yok.</T> : null}
+      <View style={{ flexDirection: 'row', gap: 10 }}>
+        <Btn label="Antrenman ekle" kind="secondary" onPress={addPast} style={{ flex: 1 }} />
+        <Btn
+          label="Kardiyo ekle"
+          icon="heart"
+          kind="secondary"
+          onPress={() => nav.push({ name: 'cardio', id: null, date: sel })}
+          style={{ flex: 1 }}
+        />
+      </View>
 
-      <SectionTitle>Tüm antrenmanlar</SectionTitle>
+      <SectionTitle>Tüm kayıtlar</SectionTitle>
       {sorted.length === 0 ? (
         <Empty icon="calendar" title="Henüz antrenman yok" text="Bitirdiğin her antrenman burada tarihe göre listelenir." />
       ) : null}
-      {sorted.slice(0, limit).map((w) => (
-        <WorkoutRow key={w.id} w={w} map={map} onPress={() => nav.push({ name: 'workoutDetail', id: w.id })} />
-      ))}
+      {sorted.slice(0, limit).map((it) =>
+        it.t === 'w' ? (
+          <WorkoutRow key={it.w.id} w={it.w} map={map} onPress={() => nav.push({ name: 'workoutDetail', id: it.w.id })} />
+        ) : (
+          <CardioRow key={it.c.id} c={it.c} onPress={() => nav.push({ name: 'cardio', id: it.c.id, date: it.c.date })} />
+        ),
+      )}
       {sorted.length > limit ? <Btn label="Daha fazla göster" kind="ghost" onPress={() => setLimit((l) => l + 30)} /> : null}
     </Screen>
   );
@@ -239,13 +304,17 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
             {sets.map((x, si) => {
               const weight = x.weight ?? 0;
               const reps = x.reps as number;
-              const pr = before.length > 0 && (weight > 0 ? e1rm(weight, reps) > bestE + 0.001 : bestE === 0 && reps > bestR);
+              const pr =
+                !x.warmup && before.length > 0 && (weight > 0 ? e1rm(weight, reps) > bestE + 0.001 : bestE === 0 && reps > bestR);
+              const no = sets.slice(0, si + 1).filter((y) => !y.warmup).length;
               return (
                 <View key={si} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 26 }}>
-                  <T v="small" style={{ width: 20 }}>{si + 1}</T>
-                  <T v="body" style={{ flex: 1 }}>
+                  <T v="small" style={{ width: 20 }}>{x.warmup ? 'I' : no}</T>
+                  <T v="body" color={x.warmup ? C.text2 : undefined} style={{ flex: 1 }}>
                     {weight > 0 ? `${fmtNum(weight)} kg × ${reps}` : `${reps} tekrar`}
+                    {x.warmup ? ' · ısınma' : ''}
                   </T>
+                  {x.rir != null && !x.warmup ? <T v="tiny">{fmtRir(x.rir)}</T> : null}
                   {pr ? (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                       <Icon name="award" size={14} color={C.warning} />

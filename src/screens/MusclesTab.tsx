@@ -1,17 +1,25 @@
 import React, { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useDB, useExercises } from '../store';
-import { Card, Screen, SectionTitle, Segmented, T } from '../ui';
+import { useNav } from '../nav';
+import { Btn, Card, Icon, IconName, Screen, SectionTitle, Segmented, T } from '../ui';
 import { C, HEAT_NONE, HEAT_STEPS, heatColor } from '../theme';
 import { BodyMap } from '../body';
 import { MUSCLES, MUSCLE_NAME } from '../data/muscles';
 import { MuscleId } from '../types';
-import { daysAgo, doneSets, fmtNum, muscleLoad, relDay } from '../logic';
+import { TargetStatus, daysAgo, doneSets, fmtNum, muscleLoad, relDay, targetOf, targetStatus } from '../logic';
 
 type Range = '7' | '30';
 
+const STATUS: Record<TargetStatus, { label: string; icon: IconName; color: string }> = {
+  low: { label: 'Eksik', icon: 'arrow-down', color: C.muted },
+  ok: { label: 'Hedefte', icon: 'check', color: C.good },
+  high: { label: 'Fazla', icon: 'arrow-up', color: C.warning },
+};
+
 export function MusclesTab() {
   const { db } = useDB();
+  const nav = useNav();
   const { map } = useExercises();
   const [range, setRange] = useState<Range>('7');
   const [sel, setSel] = useState<MuscleId | null>(null);
@@ -25,8 +33,12 @@ export function MusclesTab() {
   }, [load]);
 
   const rows = useMemo(() => [...MUSCLES].sort((a, b) => load[b.id].weekly - load[a.id].weekly), [load]);
-  const scaleMax = Math.max(20, ...rows.map((r) => load[r.id].weekly));
-  const untouched = rows.filter((r) => load[r.id].sets === 0).map((r) => r.name);
+  const scaleMax = Math.max(20, ...rows.map((r) => Math.max(load[r.id].weekly, targetOf(db.settings, r.id).max)));
+  const anySets = rows.some((r) => load[r.id].sets > 0);
+  const byStatus = (s: TargetStatus) =>
+    rows.filter((r) => targetStatus(load[r.id].weekly, targetOf(db.settings, r.id)) === s).map((r) => r.name);
+  const low = byStatus('low');
+  const high = byStatus('high');
 
   // Seçili kasa bu aralıkta set yazan egzersizler.
   const contributors = useMemo(() => {
@@ -48,6 +60,7 @@ export function MusclesTab() {
   }, [sel, db, map, days]);
 
   const unit = range === '7' ? 'set' : 'set/hafta';
+  const selTarget = sel ? targetOf(db.settings, sel) : null;
 
   return (
     <Screen title="Kas haritası">
@@ -75,7 +88,7 @@ export function MusclesTab() {
         </View>
       </Card>
 
-      {sel ? (
+      {sel && selTarget ? (
         <Card style={{ gap: 6, borderColor: C.borderStrong }}>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
             <T v="h2">{MUSCLE_NAME[sel]}</T>
@@ -84,8 +97,9 @@ export function MusclesTab() {
             </T>
           </View>
           <T v="small">
-            {load[sel].last ? `Son çalışma: ${relDay(load[sel].last as string)}` : 'Henüz çalışılmadı'}
+            Hedef {selTarget.min}–{selTarget.max} set · {STATUS[targetStatus(load[sel].weekly, selTarget)].label}
           </T>
+          <T v="small">{load[sel].last ? `Son çalışma: ${relDay(load[sel].last as string)}` : 'Henüz çalışılmadı'}</T>
           {contributors.length ? (
             <View style={{ gap: 4, marginTop: 4 }}>
               {contributors.map(([name, n]) => (
@@ -103,27 +117,42 @@ export function MusclesTab() {
         <T v="tiny" style={{ textAlign: 'center' }}>Ayrıntı için şemada bir kasa dokun.</T>
       )}
 
-      <SectionTitle>Bölgelere göre</SectionTitle>
+      <SectionTitle right={<Btn label="Hedefler" icon="target" kind="ghost" small onPress={() => nav.push({ name: 'muscleTargets' })} />}>
+        Hedefe göre
+      </SectionTitle>
       <Card style={{ gap: 2, paddingVertical: 8 }}>
         {rows.map((r) => {
           const l = load[r.id];
+          const t = targetOf(db.settings, r.id);
+          const st = STATUS[targetStatus(l.weekly, t)];
           const on = sel === r.id;
           return (
             <Pressable
               key={r.id}
               onPress={() => setSel(on ? null : r.id)}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 40 }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 42 }}
             >
-              <T v="small" color={on ? C.text : C.text2} style={{ width: 82, fontWeight: on ? '700' : '400' }} numberOfLines={1}>
+              <T v="small" color={on ? C.text : C.text2} style={{ width: 78, fontWeight: on ? '700' : '400' }} numberOfLines={1}>
                 {r.name}
               </T>
-              <View style={{ flex: 1, height: 10, justifyContent: 'center' }}>
+              <View style={{ flex: 1, height: 18, justifyContent: 'center' }}>
+                {/* Hedef aralığı: çubuğun arkasındaki açık bant. */}
+                <View
+                  style={{
+                    position: 'absolute',
+                    left: `${(t.min / scaleMax) * 100}%`,
+                    width: `${((t.max - t.min) / scaleMax) * 100}%`,
+                    height: 18,
+                    borderRadius: 4,
+                    backgroundColor: C.surface3,
+                  }}
+                />
                 <View style={{ position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: C.border }} />
                 {l.weekly > 0 ? (
                   <View
                     style={{
                       width: `${Math.max(2, (l.weekly / scaleMax) * 100)}%`,
-                      height: 10,
+                      height: 8,
                       borderTopRightRadius: 4,
                       borderBottomRightRadius: 4,
                       backgroundColor: heatColor(l.weekly),
@@ -131,23 +160,30 @@ export function MusclesTab() {
                   />
                 ) : null}
               </View>
-              <T v="small" color={C.text} style={{ width: 34, textAlign: 'right', fontWeight: '600' }}>
+              <T v="small" color={C.text} style={{ width: 32, textAlign: 'right', fontWeight: '600' }}>
                 {l.weekly > 0 ? fmtNum(l.weekly, 1) : '0'}
               </T>
-              <T v="tiny" style={{ width: 76, textAlign: 'right' }} numberOfLines={1}>
-                {l.last ? relDay(l.last) : 'Hiç'}
-              </T>
+              <View style={{ width: 74, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                <Icon name={st.icon} size={12} color={st.color} width={2.5} />
+                <T v="tiny" color={C.text2}>{st.label}</T>
+              </View>
             </Pressable>
           );
         })}
       </Card>
+      <T v="tiny" style={{ lineHeight: 17 }}>Gri bant her kasın haftalık hedef aralığıdır.</T>
 
-      {untouched.length && untouched.length < MUSCLES.length ? (
+      {anySets && low.length ? (
         <T v="small" style={{ lineHeight: 19 }}>
-          Bu aralıkta hiç çalışmayan bölgeler: {untouched.join(', ')}.
+          Hedefin altında: {low.join(', ')}.
         </T>
       ) : null}
-      {untouched.length === MUSCLES.length ? (
+      {anySets && high.length ? (
+        <T v="small" style={{ lineHeight: 19 }}>
+          Hedefin üstünde: {high.join(', ')}.
+        </T>
+      ) : null}
+      {!anySets ? (
         <T v="small" style={{ lineHeight: 19 }}>
           Bu aralıkta kayıtlı set yok. Antrenman girdikçe şema renklenir. Ana kas tam set, yardımcı kas yarım set sayılır.
         </T>

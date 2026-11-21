@@ -7,7 +7,7 @@ import { C } from '../theme';
 import { PROGRAM_TEMPLATES } from '../data/exercises';
 import { MUSCLE_NAME } from '../data/muscles';
 import { addTemplate, countDone, nextDayId, workoutFromDay } from '../actions';
-import { dayMuscles, daysAgo, fmtMinutes, relDay, sortWorkouts, todayStr, uid, weekStart, workoutStats } from '../logic';
+import { dayMuscles, fmtMinutes, relDay, todayStr, uid, weekSummary, workoutStats } from '../logic';
 import { ProgramDay } from '../types';
 
 export function WorkoutTab() {
@@ -17,16 +17,8 @@ export function WorkoutTab() {
   const { map } = useExercises();
   const now = useNow(30000);
 
-  const week = useMemo(() => {
-    const start = weekStart(todayStr());
-    const ws = db.workouts.filter((w) => w.date >= start);
-    return { count: ws.length, sets: ws.reduce((a, w) => a + workoutStats(w).sets, 0) };
-  }, [db.workouts]);
-
-  const last = useMemo(() => {
-    const s = sortWorkouts(db.workouts);
-    return s.length ? s[s.length - 1] : null;
-  }, [db.workouts]);
+  const week = useMemo(() => weekSummary(db), [db]);
+  const volChange = week.volumePrev7 > 0 ? ((week.volume7 - week.volumePrev7) / week.volumePrev7) * 100 : null;
 
   const lastByDay = useMemo(() => {
     const m = new Map<string, string>();
@@ -68,19 +60,26 @@ export function WorkoutTab() {
     db.workouts.length >= 3 && (db.settings.lastBackupAt == null || Date.now() - db.settings.lastBackupAt > 14 * 86400000);
 
   const activeStats = db.active ? workoutStats(db.active, now) : null;
-  const lastAgo = last ? daysAgo(last.date) : null;
 
   return (
     <Screen title="Antrenman" right={<IconBtn name="settings" label="Ayarlar" onPress={() => nav.push({ name: 'settings' })} />}>
       <View style={{ flexDirection: 'row', gap: 10 }}>
-        <StatTile label="Bu hafta" value={String(week.count)} unit="antrenman" />
-        <StatTile label="Bu hafta" value={String(week.sets)} unit="set" />
         <StatTile
-          label="Son antrenman"
-          value={lastAgo == null ? '—' : lastAgo <= 0 ? 'Bugün' : String(lastAgo)}
-          unit={lastAgo != null && lastAgo > 0 ? 'gün önce' : undefined}
+          label="Bu hafta"
+          value={`${week.count}/${week.goal}`}
+          sub={week.count >= week.goal ? 'Hedef tamam' : `${week.goal - week.count} kaldı`}
+        />
+        <StatTile label="Seri" value={String(week.streak)} unit="hafta" sub="üst üste" />
+        <StatTile
+          label="7 günlük hacim"
+          value={volChange == null ? '—' : `${volChange > 0 ? '+' : volChange < 0 ? '−' : ''}%${Math.abs(Math.round(volChange))}`}
+          sub="öncekine göre"
         />
       </View>
+      <T v="tiny">
+        Bu hafta {week.sets} set
+        {week.cardioCount ? ` · ${week.cardioCount} kardiyo, ${week.cardioMinutes} dk` : ''}
+      </T>
 
       {db.active && activeStats ? (
         <Card style={{ borderColor: C.accent, gap: 10 }}>
@@ -147,7 +146,16 @@ export function WorkoutTab() {
         })
       )}
 
-      <Btn label="Boş antrenman başlat" icon="plus" kind="secondary" onPress={() => start(null)} style={{ marginTop: 4 }} />
+      <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+        <Btn label="Boş antrenman" kind="secondary" onPress={() => start(null)} style={{ flex: 1 }} />
+        <Btn
+          label="Kardiyo ekle"
+          icon="heart"
+          kind="secondary"
+          onPress={() => nav.push({ name: 'cardio', id: null, date: todayStr() })}
+          style={{ flex: 1 }}
+        />
+      </View>
 
       {backupDue ? (
         <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }} onPress={() => nav.push({ name: 'settings' })}>

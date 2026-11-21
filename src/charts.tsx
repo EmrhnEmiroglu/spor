@@ -43,11 +43,14 @@ export function LineChart({
   height = 190,
   unit = '',
   formatX,
+  refLine,
 }: {
   series: Series[];
   height?: number;
   unit?: string;
   formatX: (x: number) => string;
+  /** Hedef gibi sabit bir değeri gösteren yatay çizgi. */
+  refLine?: { y: number; label: string };
 }) {
   const [w, setW] = useState(0);
   const [activeX, setActiveX] = useState<number | null>(null);
@@ -62,7 +65,9 @@ export function LineChart({
     xmin -= 1;
     xmax += 1;
   }
-  const ticks = niceTicks(Math.min(...all.map((p) => p.y)), Math.max(...all.map((p) => p.y)));
+  const ys = all.map((p) => p.y);
+  if (refLine) ys.push(refLine.y);
+  const ticks = niceTicks(Math.min(...ys), Math.max(...ys));
   const y0 = ticks[0];
   const y1 = ticks[ticks.length - 1];
 
@@ -127,6 +132,14 @@ export function LineChart({
               <SvgText x={w - mr} y={height - 6} fill={C.muted} fontSize={11} textAnchor="end">
                 {formatX(xs[xs.length - 1])}
               </SvgText>
+            ) : null}
+            {refLine ? (
+              <>
+                <Line x1={ml} x2={w - mr} y1={sy(refLine.y)} y2={sy(refLine.y)} stroke={C.text2} strokeWidth={1} />
+                <SvgText x={w - mr} y={sy(refLine.y) - 5} fill={C.text2} fontSize={11} textAnchor="end">
+                  {refLine.label}
+                </SvgText>
+              </>
             ) : null}
             <Line x1={sx(cur)} x2={sx(cur)} y1={mt} y2={mt + ph} stroke={C.borderStrong} strokeWidth={1} />
             {series.map((s) => {

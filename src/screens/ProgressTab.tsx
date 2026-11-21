@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { useDB, useExercises } from '../store';
 import { useNav } from '../nav';
-import { Card, Chip, Empty, Icon, Screen, SectionTitle, Segmented, StatTile, T, Tag } from '../ui';
+import { Card, Chip, Empty, Field, Icon, Screen, SectionTitle, Segmented, StatTile, T, Tag } from '../ui';
 import { C } from '../theme';
 import { LineChart, Sparkline } from '../charts';
 import {
@@ -105,7 +105,7 @@ export function ProgressTab() {
 }
 
 export function ExerciseProgressScreen({ exerciseId }: { exerciseId: string }) {
-  const { db } = useDB();
+  const { db, update } = useDB();
   const nav = useNav();
   const { map } = useExercises();
   const exr = map.get(exerciseId);
@@ -222,6 +222,22 @@ export function ExerciseProgressScreen({ exerciseId }: { exerciseId: string }) {
           </View>
         </Card>
       ) : null}
+
+      <Card style={{ gap: 8 }}>
+        <T v="label">Not</T>
+        <Field
+          value={db.exerciseNotes[exerciseId] ?? ''}
+          onChangeText={(t) =>
+            update((d) => {
+              if (t.trim()) d.exerciseNotes[exerciseId] = t;
+              else delete d.exerciseNotes[exerciseId];
+            })
+          }
+          placeholder="Koltuk ayarı, tutuş, dikkat edilecekler"
+          multiline
+        />
+        <T v="tiny">Bu not her antrenmanda egzersizin altında görünür.</T>
+      </Card>
 
       <SectionTitle>Seans geçmişi</SectionTitle>
       {[...sessions].reverse().map((s) => (

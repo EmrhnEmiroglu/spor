@@ -1,4 +1,4 @@
-import { DB, Exercise, MuscleId, ProgramDay, Workout, WorkoutEntry } from './types';
+import { DB, Exercise, MuscleId, MuscleTarget, ProgramDay, SetEntry, Settings, Workout, WorkoutEntry } from './types';
 import { MUSCLES } from './data/muscles';
 
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -64,6 +64,11 @@ export function parseNum(t: string): number | null {
   const n = Number(s);
   return isFinite(n) && n >= 0 ? n : null;
 }
+/** Saniyeyi 1:05 biçiminde yazar. */
+export function fmtClock(seconds: number): string {
+  const s = Math.max(0, Math.ceil(seconds));
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
 
 // ---------- Antrenman hesapları ----------
 
@@ -77,12 +82,16 @@ export function e1rm(weight: number, reps: number): number {
 export interface DoneSet {
   weight: number;
   reps: number;
+  rir?: number | null;
+}
+
+/** Hesaplara giren set: tamamlanmış ve ısınma olmayan. */
+export function isCounted(s: SetEntry): boolean {
+  return s.done && !s.warmup && s.reps != null && s.reps > 0;
 }
 
 export function doneSets(e: WorkoutEntry): DoneSet[] {
-  return e.sets
-    .filter((s) => s.done && s.reps != null && s.reps > 0)
-    .map((s) => ({ weight: s.weight ?? 0, reps: s.reps as number }));
+  return e.sets.filter(isCounted).map((s) => ({ weight: s.weight ?? 0, reps: s.reps as number, rir: s.rir ?? null }));
 }
 
 export interface Session {
@@ -163,7 +172,10 @@ export interface Suggestion {
   text: string;
 }
 
-/** Çift ilerleme: tekrar aralığının üstü dolunca kilo artır, dolmadıysa tekrar ekle. */
+/**
+ * Çift ilerleme: tekrar aralığının üstü dolunca kilo artır, dolmadıysa tekrar ekle.
+ * Zorluk girildiyse ve setler kolay geldiyse aralık dolmadan da kilo artışı önerir.
+ */
 export function suggest(last: Session | undefined, repMin: number, repMax: number, increment: number): Suggestion | null {
   if (!last) return null;
   if (!last.weighted) {
@@ -176,6 +188,16 @@ export function suggest(last: Session | undefined, repMin: number, repMax: numbe
       kind: 'weight',
       text: `Aralığı doldurdun. Kiloyu ${fmtNum(top + increment)} kg yap, ${repMin} tekrardan başla.`,
     };
+  }
+  const rirs = topSets.map((s) => s.rir).filter((r): r is number => r != null);
+  if (rirs.length === topSets.length && topSets.every((s) => s.reps >= repMin)) {
+    const avg = rirs.reduce((a, r) => a + r, 0) / rirs.length;
+    if (avg >= 3) {
+      return {
+        kind: 'weight',
+        text: `Setler kolay geldi, ortalama ${fmtNum(avg, 1)} tekrar kaldı. Kiloyu ${fmtNum(top + increment)} kg yap.`,
+      };
+    }
   }
   const low = Math.min(...topSets.map((s) => s.reps));
   return {
@@ -196,6 +218,10 @@ export function isStalled(sessions: Session[]): boolean {
 
 export function fmtSets(sets: DoneSet[]): string {
   return sets.map((s) => (s.weight > 0 ? `${fmtNum(s.weight)}×${s.reps}` : `${s.reps}`)).join(' · ');
+}
+
+export function fmtRir(rir: number): string {
+  return rir >= 4 ? '4+ kaldı' : `${rir} kaldı`;
 }
 
 export interface WorkoutStats {
@@ -226,7 +252,7 @@ export function fmtMinutes(m: number | null): string {
   return `${Math.floor(m / 60)} sa ${m % 60} dk`;
 }
 
-// ---------- Kas yükü ----------
+// ---------- Kas yükü ve hedefler ----------
 
 export interface MuscleLoad {
   sets: number;
@@ -265,6 +291,36 @@ export function muscleLoad(db: DB, exMap: Map<string, Exercise>, rangeDays: numb
   return out;
 }
 
+/** Haftalık set hedefi varsayılanları. Büyük kaslar daha yüksek hacim alır. */
+export const DEFAULT_TARGETS: Record<MuscleId, MuscleTarget> = {
+  chest: { min: 10, max: 20 },
+  shoulders: { min: 10, max: 20 },
+  lats: { min: 10, max: 20 },
+  upperBack: { min: 10, max: 20 },
+  quads: { min: 10, max: 20 },
+  hamstrings: { min: 8, max: 16 },
+  glutes: { min: 8, max: 16 },
+  biceps: { min: 8, max: 16 },
+  triceps: { min: 8, max: 16 },
+  calves: { min: 6, max: 16 },
+  abs: { min: 6, max: 16 },
+  forearms: { min: 4, max: 12 },
+  traps: { min: 4, max: 12 },
+  lowerBack: { min: 4, max: 12 },
+};
+
+export function targetOf(settings: Settings, m: MuscleId): MuscleTarget {
+  return settings.muscleTargets?.[m] ?? DEFAULT_TARGETS[m];
+}
+
+export type TargetStatus = 'low' | 'ok' | 'high';
+
+export function targetStatus(weekly: number, t: MuscleTarget): TargetStatus {
+  if (weekly < t.min - 0.01) return 'low';
+  if (weekly > t.max + 0.01) return 'high';
+  return 'ok';
+}
+
 export function dayMuscles(day: ProgramDay, exMap: Map<string, Exercise>): MuscleId[] {
   const seen: MuscleId[] = [];
   for (const it of day.items) {
@@ -281,12 +337,65 @@ export function workoutMuscles(w: Workout, exMap: Map<string, Exercise>): Muscle
   return seen;
 }
 
+// ---------- Haftalık özet ----------
+
 /** Haftanın pazartesi günü. */
 export function weekStart(s: string): string {
   const d = parseDate(s);
   const off = (d.getDay() + 6) % 7;
   return addDays(s, -off);
 }
+
+export interface WeekSummary {
+  count: number;
+  goal: number;
+  /** Hedefi tutturduğun art arda hafta sayısı. */
+  streak: number;
+  sets: number;
+  volume7: number;
+  volumePrev7: number;
+  cardioCount: number;
+  cardioMinutes: number;
+}
+
+export function weekSummary(db: DB): WeekSummary {
+  const start = weekStart(todayStr());
+  const goal = Math.max(1, db.settings.weeklyGoal || 1);
+  const perWeek = new Map<string, number>();
+  let sets = 0;
+  let volume7 = 0;
+  let volumePrev7 = 0;
+  for (const w of db.workouts) {
+    const k = weekStart(w.date);
+    perWeek.set(k, (perWeek.get(k) ?? 0) + 1);
+    const st = workoutStats(w);
+    if (k === start) sets += st.sets;
+    const ago = daysAgo(w.date);
+    if (ago >= 0 && ago < 7) volume7 += st.volume;
+    else if (ago >= 7 && ago < 14) volumePrev7 += st.volume;
+  }
+  const count = perWeek.get(start) ?? 0;
+  // Bu hafta henüz dolmadıysa seri bozulmuş sayılmaz; geçmiş haftalara bakılır.
+  let streak = count >= goal ? 1 : 0;
+  let k = addDays(start, -7);
+  while ((perWeek.get(k) ?? 0) >= goal) {
+    streak++;
+    k = addDays(k, -7);
+  }
+  const cardio = db.cardio.filter((c) => c.date >= start);
+  return {
+    count,
+    goal,
+    streak,
+    sets,
+    volume7,
+    volumePrev7,
+    cardioCount: cardio.length,
+    cardioMinutes: cardio.reduce((a, c) => a + c.minutes, 0),
+  };
+}
+
+// ---------- Kilo eğilimi ----------
 
 /** Tarihe göre sıralı kayıtlar için 7 günlük hareketli ortalama. */
 export function movingAverage(points: { date: string; value: number }[], window = 7): { date: string; value: number }[] {
@@ -299,4 +408,49 @@ export function movingAverage(points: { date: string; value: number }[], window 
     });
     return { date: p.date, value: inWin.reduce((a, q) => a + q.value, 0) / inWin.length };
   });
+}
+
+/** Son haftalardaki günlük değişim (en küçük kareler eğimi). Veri yetersizse null. */
+export function trendPerDay(points: { date: string; value: number }[], windowDays = 28): number | null {
+  const pts = points.filter((p) => {
+    const a = daysAgo(p.date);
+    return a >= 0 && a < windowDays;
+  });
+  if (pts.length < 3) return null;
+  const xs = pts.map((p) => dayNumber(p.date));
+  if (Math.max(...xs) - Math.min(...xs) < 6) return null;
+  const mx = xs.reduce((a, x) => a + x, 0) / xs.length;
+  const my = pts.reduce((a, p) => a + p.value, 0) / pts.length;
+  let num = 0;
+  let den = 0;
+  pts.forEach((p, i) => {
+    num += (xs[i] - mx) * (p.value - my);
+    den += (xs[i] - mx) * (xs[i] - mx);
+  });
+  return den === 0 ? null : num / den;
+}
+
+// ---------- Plaka hesabı ----------
+
+export interface PlateResult {
+  /** Barın bir yanına takılacak plakalar, ağırdan hafife. */
+  side: number[];
+  achieved: number;
+  /** İstenen kiloya ulaşmak için eksik kalan miktar. */
+  missing: number;
+}
+
+export function platesPerSide(total: number, bar: number, plates: number[]): PlateResult {
+  const r3 = (n: number) => Math.round(n * 1000) / 1000;
+  let rem = r3((total - bar) / 2);
+  const side: number[] = [];
+  if (rem < 0) return { side, achieved: bar, missing: r3(total - bar) };
+  for (const p of [...plates].sort((a, b) => b - a)) {
+    while (rem >= p - 1e-9) {
+      side.push(p);
+      rem = r3(rem - p);
+    }
+  }
+  const achieved = r3(bar + 2 * side.reduce((a, p) => a + p, 0));
+  return { side, achieved, missing: r3(total - achieved) };
 }

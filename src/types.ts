@@ -42,6 +42,10 @@ export interface SetEntry {
   weight: number | null;
   reps: number | null;
   done: boolean;
+  /** Isınma seti: rekor, hacim ve kas haritası hesaplarına girmez. */
+  warmup?: boolean;
+  /** Set bittiğinde kaç tekrar daha çıkardı (4 = dört ya da fazlası). */
+  rir?: number | null;
 }
 
 export interface WorkoutEntry {
@@ -84,10 +88,35 @@ export interface MeasureLog {
   values: Partial<Record<MeasureId, number>>;
 }
 
+export interface MuscleTarget {
+  min: number;
+  max: number;
+}
+
+export interface CardioLog {
+  id: string;
+  date: string;
+  kind: string;
+  minutes: number;
+  km: number | null;
+}
+
 export interface Settings {
   /** Kilo artış adımı (kg) */
   increment: number;
   lastBackupAt: number | null;
+  restEnabled: boolean;
+  restSeconds: number;
+  restSound: boolean;
+  /** Set sonunda "kaç tekrar daha çıkardı" sorusu sorulsun mu */
+  trackRir: boolean;
+  /** Haftalık antrenman hedefi */
+  weeklyGoal: number;
+  goalWeight: number | null;
+  barWeight: number;
+  plates: number[];
+  /** Varsayılandan farklı girilen haftalık set hedefleri */
+  muscleTargets: Partial<Record<MuscleId, MuscleTarget>>;
 }
 
 export interface DB {
@@ -98,5 +127,8 @@ export interface DB {
   active: Workout | null;
   weights: WeightLog[];
   measures: MeasureLog[];
+  cardio: CardioLog[];
+  /** Egzersize özel kalıcı notlar (koltuk ayarı vb.) */
+  exerciseNotes: Record<string, string>;
   settings: Settings;
 }

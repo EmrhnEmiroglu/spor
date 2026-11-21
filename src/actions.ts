@@ -1,5 +1,5 @@
 import { DB, ProgramDay, SetEntry, Workout, WorkoutEntry } from './types';
-import { doneSets, parseDate, todayStr, uid } from './logic';
+import { parseDate, todayStr, uid } from './logic';
 import { ProgramTemplate } from './data/exercises';
 
 export const emptySet = (): SetEntry => ({ weight: null, reps: null, done: false });
@@ -33,8 +33,9 @@ export function pruneWorkout(w: Workout): void {
   w.entries = w.entries.filter((e) => e.sets.length > 0);
 }
 
+/** Isınma setleri dahil, işaretlenmiş set sayısı. */
 export function countDone(w: Workout): number {
-  return w.entries.reduce((a, e) => a + doneSets(e).length, 0);
+  return w.entries.reduce((a, e) => a + e.sets.filter((s) => s.done && s.reps != null && s.reps > 0).length, 0);
 }
 
 /** Aktif antrenmanı kaydeder. Kaydedilen antrenmanın kimliğini döner. */

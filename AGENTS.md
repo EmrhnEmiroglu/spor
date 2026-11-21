@@ -31,6 +31,16 @@ Kişisel antrenman takip uygulaması. Arayüz dili Türkçe. Birincil hedef, iPh
 - `app.json` içindeki `experiments.baseUrl` GitHub Pages alt yoluna (`/spor`) göre ayarlıdır.
 - `public/sw.js` ve `public/index.html` çevrimdışı önbelleği yönetir.
 
+## İstatistik kuralları
+
+Aynı veri her ekranda aynı sonucu vermeli. Yeni bir grafik ya da hesap eklerken şunlara uy:
+
+- Hafta her yerde Pazartesi–Pazar'dır (`weekStart`, `weekStarts`). Tek istisna kas haritasının "Son 7 gün" görünümüdür ve öyle etiketlenir.
+- Set sayımı tek yerden geçer: `doneSets` (ısınma ve işaretlenmemiş setler sayılmaz). Ana kas 1, yardımcı kas 0,5 set.
+- Grafikler `src/charts.tsx` içindeki ortak bileşenlerle çizilir (`LineChart`, `BarChart`, `PartsBar`, `CalendarGrid`). Elle çubuk ya da eksen çizme.
+- Trend grafikleri ortak aralık seçiciyi kullanır (`RangePicker`, `useRangeWeeks`, `useRangeStart`). Seçim `settings.statsRange` içinde tutulur ve tüm ekranlarda aynıdır.
+- Vücut modeli `src/body3d.tsx` içinde elipsoidlerden kuruludur; hazır 3D model ya da 3D kütüphane eklenmez.
+
 ## Navigation & Routing
 
 - Expo Router **kullanılmıyor**. Tek sayfalık yapı: sekmeler ve üst üste açılan ekranlar `src/nav.tsx` içindeki basit yığınla yönetilir, ekranlar `App.tsx` içinde eşlenir. Yeni ekran eklerken `Route` tipine ekle ve `renderRoute` içinde karşılığını yaz.

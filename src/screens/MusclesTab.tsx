@@ -2,14 +2,29 @@ import React, { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useDB, useExercises } from '../store';
 import { useNav } from '../nav';
-import { Btn, Card, Icon, IconName, Screen, SectionTitle, Segmented, T } from '../ui';
+import { Btn, Card, Icon, IconBtn, IconName, Screen, SectionTitle, Segmented, T } from '../ui';
 import { C, HEAT_NONE, HEAT_STEPS, heatColor } from '../theme';
-import { BodyMap } from '../body';
+import { Body3D } from '../body3d';
+import { BarChart, RangePicker, useRangeWeeks } from '../charts';
 import { MUSCLES, MUSCLE_NAME } from '../data/muscles';
 import { MuscleId } from '../types';
-import { TargetStatus, daysAgo, doneSets, fmtNum, muscleLoad, relDay, targetOf, targetStatus } from '../logic';
+import {
+  TargetStatus,
+  addDays,
+  doneSets,
+  fmtNum,
+  fmtWeek,
+  muscleLoadBetween,
+  muscleWeeklySeries,
+  relDay,
+  targetOf,
+  targetStatus,
+  todayStr,
+  weekStart,
+  weekStarts,
+} from '../logic';
 
-type Range = '7' | '30';
+type Mode = 'r7' | 'week' | 'r28';
 
 const STATUS: Record<TargetStatus, { label: string; icon: IconName; color: string }> = {
   low: { label: 'Eksik', icon: 'arrow-down', color: C.muted },
@@ -21,11 +36,26 @@ export function MusclesTab() {
   const { db } = useDB();
   const nav = useNav();
   const { map } = useExercises();
-  const [range, setRange] = useState<Range>('7');
+  const [mode, setMode] = useState<Mode>('r7');
+  const [weekOffset, setWeekOffset] = useState(0);
   const [sel, setSel] = useState<MuscleId | null>(null);
-  const days = Number(range);
+  const rangeWeeks = useRangeWeeks();
+  const today = todayStr();
 
-  const load = useMemo(() => muscleLoad(db, map, days), [db, map, days]);
+  // Seçilen döneme göre tarih aralığı ve kaç haftaya bölüneceği.
+  const period = useMemo(() => {
+    if (mode === 'r7') return { from: addDays(today, -6), to: today, weeks: 1, label: 'Bugün dahil son 7 gün' };
+    if (mode === 'r28') return { from: addDays(today, -27), to: today, weeks: 4, label: 'Son 28 günün haftalık ortalaması' };
+    const from = addDays(weekStart(today), -7 * weekOffset);
+    return {
+      from,
+      to: addDays(from, 6),
+      weeks: 1,
+      label: weekOffset === 0 ? `Bu hafta · ${fmtWeek(from)}` : weekOffset === 1 ? `Geçen hafta · ${fmtWeek(from)}` : fmtWeek(from),
+    };
+  }, [mode, weekOffset, today]);
+
+  const load = useMemo(() => muscleLoadBetween(db, map, period.from, period.to, period.weeks), [db, map, period]);
   const values = useMemo(() => {
     const o = {} as Record<MuscleId, number>;
     for (const m of MUSCLES) o[m.id] = load[m.id].weekly;
@@ -40,14 +70,21 @@ export function MusclesTab() {
   const low = byStatus('low');
   const high = byStatus('high');
 
-  // Seçili kasa bu aralıkta set yazan egzersizler.
+  // Seçili kasın hafta hafta set sayısı (ortak aralık seçiciye bağlı).
+  const trend = useMemo(() => {
+    if (!sel) return [];
+    const starts = weekStarts(rangeWeeks);
+    const series = muscleWeeklySeries(db, map, rangeWeeks)[sel];
+    return starts.map((s, i) => ({ key: s, label: fmtWeek(s), y: series[i] }));
+  }, [sel, db, map, rangeWeeks]);
+
+  // Seçili kasa bu dönemde set yazan egzersizler.
   const contributors = useMemo(() => {
     if (!sel) return [];
     const acc = new Map<string, number>();
     const all = db.active ? [...db.workouts, db.active] : db.workouts;
     for (const w of all) {
-      const ago = daysAgo(w.date);
-      if (ago < 0 || ago >= days) continue;
+      if (w.date < period.from || w.date > period.to) continue;
       for (const e of w.entries) {
         const exr = map.get(e.exerciseId);
         if (!exr) continue;
@@ -57,26 +94,37 @@ export function MusclesTab() {
       }
     }
     return [...acc.entries()].sort((a, b) => b[1] - a[1]);
-  }, [sel, db, map, days]);
+  }, [sel, db, map, period]);
 
-  const unit = range === '7' ? 'set' : 'set/hafta';
+  const unit = period.weeks === 1 ? 'set' : 'set/hafta';
   const selTarget = sel ? targetOf(db.settings, sel) : null;
 
   return (
     <Screen title="Kas haritası">
       <Segmented
-        value={range}
-        onChange={setRange}
+        value={mode}
+        onChange={setMode}
         options={[
-          { key: '7', label: 'Son 7 gün' },
-          { key: '30', label: 'Son 30 gün' },
+          { key: 'r7', label: 'Son 7 gün' },
+          { key: 'week', label: 'Hafta' },
+          { key: 'r28', label: '4 hafta ort.' },
         ]}
       />
 
+      {mode === 'week' ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <IconBtn name="chevron-left" label="Önceki hafta" onPress={() => setWeekOffset((o) => o + 1)} />
+          <T v="body" style={{ fontWeight: '600' }}>{period.label}</T>
+          <IconBtn name="chevron-right" label="Sonraki hafta" disabled={weekOffset === 0} onPress={() => setWeekOffset((o) => Math.max(0, o - 1))} />
+        </View>
+      ) : (
+        <T v="tiny" style={{ textAlign: 'center' }}>{period.label}</T>
+      )}
+
       <Card style={{ gap: 14 }}>
-        <BodyMap values={values} selected={sel} onSelect={(m) => setSel(sel === m ? null : m)} />
+        <Body3D values={values} selected={sel} onSelect={(m) => setSel(sel === m ? null : m)} />
         <View style={{ gap: 6 }}>
-          <T v="tiny">{range === '7' ? 'Haftalık set sayısı' : 'Haftalık ortalama set sayısı'}</T>
+          <T v="tiny">{period.weeks === 1 ? 'Haftalık set sayısı' : 'Haftalık ortalama set sayısı'}</T>
           <View style={{ flexDirection: 'row', gap: 2 }}>
             {[{ color: HEAT_NONE, label: '0' }, ...HEAT_STEPS].map((s) => (
               <View key={s.label} style={{ flex: 1, gap: 4 }}>
@@ -89,7 +137,7 @@ export function MusclesTab() {
       </Card>
 
       {sel && selTarget ? (
-        <Card style={{ gap: 6, borderColor: C.borderStrong }}>
+        <Card style={{ gap: 8, borderColor: C.borderStrong }}>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
             <T v="h2">{MUSCLE_NAME[sel]}</T>
             <T v="body" style={{ fontWeight: '600' }}>
@@ -98,10 +146,21 @@ export function MusclesTab() {
           </View>
           <T v="small">
             Hedef {selTarget.min}–{selTarget.max} set · {STATUS[targetStatus(load[sel].weekly, selTarget)].label}
+            {load[sel].last ? ` · Son çalışma ${relDay(load[sel].last as string).toLocaleLowerCase('tr')}` : ''}
           </T>
-          <T v="small">{load[sel].last ? `Son çalışma: ${relDay(load[sel].last as string)}` : 'Henüz çalışılmadı'}</T>
+
+          <T v="label" style={{ marginTop: 6 }}>Haftalık set</T>
+          <BarChart
+            bars={trend}
+            unit="set"
+            color={HEAT_STEPS[4].color}
+            band={{ min: selTarget.min, max: selTarget.max, label: `Hedef aralığı: haftada ${selTarget.min}–${selTarget.max} set` }}
+          />
+          <RangePicker />
+
+          <T v="label" style={{ marginTop: 6 }}>Bu dönemde</T>
           {contributors.length ? (
-            <View style={{ gap: 4, marginTop: 4 }}>
+            <View style={{ gap: 4 }}>
               {contributors.map(([name, n]) => (
                 <View key={name} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
                   <T v="small" style={{ flex: 1 }} numberOfLines={1}>{name}</T>
@@ -110,12 +169,10 @@ export function MusclesTab() {
               ))}
             </View>
           ) : (
-            <T v="small">Bu aralıkta bu kasa set yazılmadı.</T>
+            <T v="small">Bu dönemde bu kasa set yazılmadı.</T>
           )}
         </Card>
-      ) : (
-        <T v="tiny" style={{ textAlign: 'center' }}>Ayrıntı için şemada bir kasa dokun.</T>
-      )}
+      ) : null}
 
       <SectionTitle right={<Btn label="Hedefler" icon="target" kind="ghost" small onPress={() => nav.push({ name: 'muscleTargets' })} />}>
         Hedefe göre
@@ -171,7 +228,9 @@ export function MusclesTab() {
           );
         })}
       </Card>
-      <T v="tiny" style={{ lineHeight: 17 }}>Gri bant her kasın haftalık hedef aralığıdır.</T>
+      <T v="tiny" style={{ lineHeight: 17 }}>
+        Gri bant her kasın haftalık hedef aralığıdır. Ana kas tam set, yardımcı kas yarım set sayılır. Isınma setleri sayılmaz.
+      </T>
 
       {anySets && low.length ? (
         <T v="small" style={{ lineHeight: 19 }}>
@@ -183,11 +242,7 @@ export function MusclesTab() {
           Hedefin üstünde: {high.join(', ')}.
         </T>
       ) : null}
-      {!anySets ? (
-        <T v="small" style={{ lineHeight: 19 }}>
-          Bu aralıkta kayıtlı set yok. Antrenman girdikçe şema renklenir. Ana kas tam set, yardımcı kas yarım set sayılır.
-        </T>
-      ) : null}
+      {!anySets ? <T v="small">Bu dönemde kayıtlı set yok.</T> : null}
     </Screen>
   );
 }

@@ -115,6 +115,8 @@ export interface Settings {
   goalWeight: number | null;
   barWeight: number;
   plates: number[];
+  /** Trend grafiklerinde gösterilen hafta sayısı: 4, 12, 26 ya da 52 */
+  statsRange: number;
   /** Varsayılandan farklı girilen haftalık set hedefleri */
   muscleTargets: Partial<Record<MuscleId, MuscleTarget>>;
 }

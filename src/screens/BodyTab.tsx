@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { useDB } from '../store';
 import { Btn, Card, Chip, DatePicker, Empty, IconBtn, NumInput, Screen, SectionTitle, Segmented, StatTile, T, useDialog } from '../ui';
 import { C } from '../theme';
-import { LineChart } from '../charts';
+import { LineChart, RangePicker, SERIES, useRangeStart } from '../charts';
 import { MEASURES } from '../data/muscles';
 import { MeasureId } from '../types';
 import { addDays, dayNumber, daysAgo, fmtDate, fmtDayNumber, fmtNum, movingAverage, relDay, todayStr, trendPerDay } from '../logic';
@@ -18,6 +18,7 @@ function WeightSection() {
   const [date, setDate] = useState(todayStr());
   const [kg, setKg] = useState<number | null>(null);
   const [limit, setLimit] = useState(7);
+  const rangeStart = useRangeStart();
 
   const logs = useMemo(() => [...db.weights].sort((a, b) => (a.date < b.date ? -1 : 1)), [db.weights]);
   const avg = useMemo(() => movingAverage(logs.map((l) => ({ date: l.date, value: l.kg }))), [logs]);
@@ -92,7 +93,7 @@ function WeightSection() {
             <StatTile label="7 gün ort." value={fmtNum(latestAvg.value, 1)} unit="kg" />
             <StatTile label="30 günde" value={change == null ? '—' : signed(change)} unit={change == null ? undefined : 'kg'} />
           </View>
-          <Card>
+          <Card style={{ gap: 10 }}>
             <LineChart
               unit="kg"
               formatX={fmtDayNumber}
@@ -101,18 +102,19 @@ function WeightSection() {
                 {
                   key: 'avg',
                   label: '7 gün ort.',
-                  color: C.accent,
-                  points: avg.map((p) => ({ x: dayNumber(p.date), y: p.value })),
+                  color: SERIES[0],
+                  points: avg.filter((p) => p.date >= rangeStart).map((p) => ({ x: dayNumber(p.date), y: p.value })),
                 },
                 {
                   key: 'raw',
                   label: 'Tartı',
                   color: C.muted,
                   style: 'dots',
-                  points: logs.map((l) => ({ x: dayNumber(l.date), y: l.kg })),
+                  points: logs.filter((l) => l.date >= rangeStart).map((l) => ({ x: dayNumber(l.date), y: l.kg })),
                 },
               ]}
             />
+            <RangePicker />
           </Card>
           <SectionTitle>Kayıtlar</SectionTitle>
           <Card style={{ paddingVertical: 4 }}>
@@ -146,6 +148,7 @@ function MeasureSection() {
   const [draft, setDraft] = useState<Partial<Record<MeasureId, number | null>>>({});
   const [sel, setSel] = useState<MeasureId>('waist');
   const [formKey, setFormKey] = useState(0);
+  const rangeStart = useRangeStart();
 
   const logs = useMemo(() => [...db.measures].sort((a, b) => (a.date < b.date ? -1 : 1)), [db.measures]);
 
@@ -216,7 +219,7 @@ function MeasureSection() {
                   sub={series.length > 1 ? fmtDate(series[0].date, 'long') : undefined}
                 />
               </View>
-              <Card>
+              <Card style={{ gap: 10 }}>
                 <LineChart
                   unit="cm"
                   formatX={fmtDayNumber}
@@ -224,11 +227,12 @@ function MeasureSection() {
                     {
                       key: sel,
                       label: selName,
-                      color: C.accent,
-                      points: series.map((p) => ({ x: dayNumber(p.date), y: p.value })),
+                      color: SERIES[0],
+                      points: series.filter((p) => p.date >= rangeStart).map((p) => ({ x: dayNumber(p.date), y: p.value })),
                     },
                   ]}
                 />
+                <RangePicker />
               </Card>
             </>
           ) : (

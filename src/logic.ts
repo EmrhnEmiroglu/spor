@@ -266,12 +266,21 @@ export function emptyLoad(): Record<MuscleId, MuscleLoad> {
   return o;
 }
 
-/** Ana kas 1 set, yardımcı kas yarım set sayılır. */
-export function muscleLoad(db: DB, exMap: Map<string, Exercise>, rangeDays: number): Record<MuscleId, MuscleLoad> {
+/**
+ * Sayım kuralı (her ekranda aynı): ana kas 1 set, yardımcı kas yarım set.
+ * Isınma setleri ve işaretlenmemiş setler sayılmaz.
+ */
+export function muscleLoadBetween(
+  db: DB,
+  exMap: Map<string, Exercise>,
+  from: string,
+  to: string,
+  weeks: number,
+): Record<MuscleId, MuscleLoad> {
   const out = emptyLoad();
   const all = db.active ? [...db.workouts, db.active] : db.workouts;
   for (const w of all) {
-    const ago = daysAgo(w.date);
+    const inRange = w.date >= from && w.date <= to;
     for (const e of w.entries) {
       const n = doneSets(e).length;
       if (!n) continue;
@@ -280,15 +289,21 @@ export function muscleLoad(db: DB, exMap: Map<string, Exercise>, rangeDays: numb
       const touch = (m: MuscleId, factor: number) => {
         const o = out[m];
         if (!o) return;
-        if (ago >= 0 && ago < rangeDays) o.sets += n * factor;
-        if (o.last == null || w.date > o.last) o.last = w.date;
+        if (inRange) o.sets += n * factor;
+        if (w.date <= to && (o.last == null || w.date > o.last)) o.last = w.date;
       };
       exr.primary.forEach((m) => touch(m, 1));
       exr.secondary.forEach((m) => touch(m, 0.5));
     }
   }
-  for (const m of MUSCLES) out[m.id].weekly = (out[m.id].sets * 7) / rangeDays;
+  for (const m of MUSCLES) out[m.id].weekly = out[m.id].sets / weeks;
   return out;
+}
+
+/** Bugün dahil son N gün. */
+export function muscleLoad(db: DB, exMap: Map<string, Exercise>, rangeDays: number): Record<MuscleId, MuscleLoad> {
+  const today = todayStr();
+  return muscleLoadBetween(db, exMap, addDays(today, -(rangeDays - 1)), today, rangeDays / 7);
 }
 
 /** Haftalık set hedefi varsayılanları. Büyük kaslar daha yüksek hacim alır. */
@@ -352,8 +367,8 @@ export interface WeekSummary {
   /** Hedefi tutturduğun art arda hafta sayısı. */
   streak: number;
   sets: number;
-  volume7: number;
-  volumePrev7: number;
+  /** Geçen haftanın (Pazartesi–Pazar) toplam seti. */
+  setsPrev: number;
   cardioCount: number;
   cardioMinutes: number;
 }
@@ -362,17 +377,14 @@ export function weekSummary(db: DB): WeekSummary {
   const start = weekStart(todayStr());
   const goal = Math.max(1, db.settings.weeklyGoal || 1);
   const perWeek = new Map<string, number>();
+  const prevStart = addDays(start, -7);
   let sets = 0;
-  let volume7 = 0;
-  let volumePrev7 = 0;
+  let setsPrev = 0;
   for (const w of db.workouts) {
     const k = weekStart(w.date);
     perWeek.set(k, (perWeek.get(k) ?? 0) + 1);
-    const st = workoutStats(w);
-    if (k === start) sets += st.sets;
-    const ago = daysAgo(w.date);
-    if (ago >= 0 && ago < 7) volume7 += st.volume;
-    else if (ago >= 7 && ago < 14) volumePrev7 += st.volume;
+    if (k === start) sets += workoutStats(w).sets;
+    else if (k === prevStart) setsPrev += workoutStats(w).sets;
   }
   const count = perWeek.get(start) ?? 0;
   // Bu hafta henüz dolmadıysa seri bozulmuş sayılmaz; geçmiş haftalara bakılır.
@@ -388,8 +400,7 @@ export function weekSummary(db: DB): WeekSummary {
     goal,
     streak,
     sets,
-    volume7,
-    volumePrev7,
+    setsPrev,
     cardioCount: cardio.length,
     cardioMinutes: cardio.reduce((a, c) => a + c.minutes, 0),
   };
@@ -453,4 +464,151 @@ export function platesPerSide(total: number, bar: number, plates: number[]): Pla
   }
   const achieved = r3(bar + 2 * side.reduce((a, p) => a + p, 0));
   return { side, achieved, missing: r3(total - achieved) };
+}
+
+// ---------- İstatistik: haftalık seriler ----------
+// Hafta her yerde Pazartesi–Pazar'dır. "N hafta" aralığı, içinde bulunulan haftayı
+// ve ondan önceki N-1 tam haftayı kapsar.
+
+/** Son N haftanın pazartesileri, eskiden yeniye. */
+export function weekStarts(n: number): string[] {
+  const cur = weekStart(todayStr());
+  return Array.from({ length: n }, (_, i) => addDays(cur, -7 * (n - 1 - i)));
+}
+
+/** "16–22 Kas" ya da ay değişiyorsa "30 Kas–6 Ara". */
+export function fmtWeek(start: string): string {
+  const a = parseDate(start);
+  const b = parseDate(addDays(start, 6));
+  if (a.getMonth() === b.getMonth()) return `${a.getDate()}–${b.getDate()} ${MONTHS_SHORT[b.getMonth()]}`;
+  return `${a.getDate()} ${MONTHS_SHORT[a.getMonth()]}–${b.getDate()} ${MONTHS_SHORT[b.getMonth()]}`;
+}
+
+export interface WeekPoint {
+  start: string;
+  workouts: number;
+  sets: number;
+  volume: number;
+}
+
+export function weeklySeries(db: DB, n: number): WeekPoint[] {
+  const starts = weekStarts(n);
+  const idx = new Map(starts.map((s, i) => [s, i]));
+  const out: WeekPoint[] = starts.map((start) => ({ start, workouts: 0, sets: 0, volume: 0 }));
+  for (const w of db.workouts) {
+    const i = idx.get(weekStart(w.date));
+    if (i == null) continue;
+    const st = workoutStats(w);
+    out[i].workouts++;
+    out[i].sets += st.sets;
+    out[i].volume += st.volume;
+  }
+  return out;
+}
+
+/** Her kas için, weekStarts(n) ile hizalı haftalık set dizisi. */
+export function muscleWeeklySeries(db: DB, exMap: Map<string, Exercise>, n: number): Record<MuscleId, number[]> {
+  const starts = weekStarts(n);
+  const idx = new Map(starts.map((s, i) => [s, i]));
+  const out = {} as Record<MuscleId, number[]>;
+  for (const m of MUSCLES) out[m.id] = starts.map(() => 0);
+  for (const w of db.workouts) {
+    const i = idx.get(weekStart(w.date));
+    if (i == null) continue;
+    for (const e of w.entries) {
+      const c = doneSets(e).length;
+      if (!c) continue;
+      const exr = exMap.get(e.exerciseId);
+      if (!exr) continue;
+      for (const m of exr.primary) if (out[m]) out[m][i] += c;
+      for (const m of exr.secondary) if (out[m]) out[m][i] += c * 0.5;
+    }
+  }
+  return out;
+}
+
+/** Gün başına tamamlanan set sayısı. */
+export function dailySets(db: DB): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const w of db.workouts) m.set(w.date, (m.get(w.date) ?? 0) + workoutStats(w).sets);
+  return m;
+}
+
+export interface BalancePart {
+  label: string;
+  value: number;
+}
+
+export interface Balance {
+  title: string;
+  note: string;
+  parts: BalancePart[];
+}
+
+const sumOf = (sets: Record<MuscleId, number>, ids: MuscleId[]) => ids.reduce((a, m) => a + (sets[m] ?? 0), 0);
+
+/** Kas başına set toplamlarından bölgeler arası denge oranları. */
+export function balances(sets: Record<MuscleId, number>): Balance[] {
+  const push: MuscleId[] = ['chest', 'shoulders', 'triceps'];
+  const pull: MuscleId[] = ['lats', 'upperBack', 'biceps', 'traps', 'forearms'];
+  const legs: MuscleId[] = ['quads', 'hamstrings', 'glutes', 'calves'];
+  const front: MuscleId[] = ['chest', 'abs', 'quads', 'biceps'];
+  const back: MuscleId[] = ['lats', 'upperBack', 'traps', 'lowerBack', 'glutes', 'hamstrings', 'triceps', 'calves'];
+  return [
+    {
+      title: 'İtiş / Çekiş / Bacak',
+      note: 'Karın ve bel bu orana dahil değil.',
+      parts: [
+        { label: 'İtiş', value: sumOf(sets, push) },
+        { label: 'Çekiş', value: sumOf(sets, pull) },
+        { label: 'Bacak', value: sumOf(sets, legs) },
+      ],
+    },
+    {
+      title: 'Üst / Alt vücut',
+      note: 'Karın ve bel bu orana dahil değil.',
+      parts: [
+        { label: 'Üst', value: sumOf(sets, [...push, ...pull]) },
+        { label: 'Alt', value: sumOf(sets, legs) },
+      ],
+    },
+    {
+      title: 'Ön / Arka',
+      note: 'Omuz ve ön kol iki yöne de çalıştığı için dahil değil.',
+      parts: [
+        { label: 'Ön', value: sumOf(sets, front) },
+        { label: 'Arka', value: sumOf(sets, back) },
+      ],
+    },
+  ];
+}
+
+export interface RecordRow {
+  exerciseId: string;
+  metric: Metric;
+  best: number;
+  bestDate: string;
+  /** Verilen tarihten sonra kırılan rekor sayısı. */
+  prs: number;
+}
+
+/** Egzersiz bazında en iyi derece ve aralıktaki rekor sayısı. İlk seans rekor sayılmaz. */
+export function recordRows(index: Map<string, Session[]>, from: string): RecordRow[] {
+  const rows: RecordRow[] = [];
+  for (const [exerciseId, sessions] of index) {
+    const metric = mainMetric(sessions);
+    let best = -Infinity;
+    let bestDate = sessions[0].date;
+    let prs = 0;
+    sessions.forEach((s, i) => {
+      const v = metricOf(s, metric);
+      if (v > best + 0.001) {
+        if (i > 0 && s.date >= from) prs++;
+        best = v;
+        bestDate = s.date;
+      }
+    });
+    rows.push({ exerciseId, metric, best, bestDate, prs });
+  }
+  return rows.sort((a, b) => (a.bestDate < b.bestDate ? 1 : a.bestDate > b.bestDate ? -1 : 0));
 }

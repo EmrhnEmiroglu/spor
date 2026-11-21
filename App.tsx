@@ -13,7 +13,8 @@ import { CardioScreen, MuscleTargetsScreen } from './src/screens/Extras';
 import { WorkoutTab } from './src/screens/WorkoutTab';
 import { HistoryTab, WorkoutDetailScreen } from './src/screens/HistoryTab';
 import { MusclesTab } from './src/screens/MusclesTab';
-import { ExerciseProgressScreen, ProgressTab } from './src/screens/ProgressTab';
+import { ExerciseProgressScreen } from './src/screens/ProgressTab';
+import { StatsTab } from './src/screens/StatsTab';
 import { BodyTab } from './src/screens/BodyTab';
 import { EditorScreen } from './src/screens/Editor';
 import { NewExerciseScreen, PickerScreen } from './src/screens/Picker';
@@ -24,7 +25,7 @@ const TABS: { id: TabId; label: string; icon: IconName }[] = [
   { id: 'workout', label: 'Antrenman', icon: 'dumbbell' },
   { id: 'history', label: 'Geçmiş', icon: 'calendar' },
   { id: 'muscles', label: 'Kaslar', icon: 'activity' },
-  { id: 'progress', label: 'İlerleme', icon: 'trend' },
+  { id: 'progress', label: 'İstatistik', icon: 'trend' },
   { id: 'body', label: 'Vücut', icon: 'user' },
 ];
 
@@ -132,7 +133,7 @@ function Root() {
           {nav.tab === 'workout' ? <WorkoutTab /> : null}
           {nav.tab === 'history' ? <HistoryTab /> : null}
           {nav.tab === 'muscles' ? <MusclesTab /> : null}
-          {nav.tab === 'progress' ? <ProgressTab /> : null}
+          {nav.tab === 'progress' ? <StatsTab /> : null}
           {nav.tab === 'body' ? <BodyTab /> : null}
         </View>
         <ActiveBanner />

@@ -19,7 +19,7 @@ export const C = {
 };
 
 /** Isı haritası: tek renk tonu, azdan çoğa koyudan parlağa. */
-export const HEAT_NONE = '#33332f';
+export const HEAT_NONE = '#45453f';
 export const HEAT_STEPS: { min: number; color: string; label: string }[] = [
   { min: 0.01, color: '#4d2c1e', label: '1–3' },
   { min: 4, color: '#74381d', label: '4–7' },

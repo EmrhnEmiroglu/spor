@@ -4,7 +4,7 @@ import { useDB, useExercises } from '../store';
 import { useNav } from '../nav';
 import { Card, Chip, Empty, Field, Icon, Screen, SectionTitle, Segmented, StatTile, T, Tag } from '../ui';
 import { C } from '../theme';
-import { LineChart, Sparkline } from '../charts';
+import { LineChart, RangePicker, SERIES, Sparkline, useRangeStart } from '../charts';
 import {
   Metric,
   Session,
@@ -23,13 +23,13 @@ import {
 } from '../logic';
 import { MUSCLE_NAME } from '../data/muscles';
 
-const METRIC_LABEL: Record<Metric, string> = {
+export const METRIC_LABEL: Record<Metric, string> = {
   e1rm: 'Tahmini 1RM',
   top: 'En ağır set',
   volume: 'Hacim',
   reps: 'En iyi tekrar',
 };
-const METRIC_UNIT: Record<Metric, string> = { e1rm: 'kg', top: 'kg', volume: 'kg', reps: 'tekrar' };
+export const METRIC_UNIT: Record<Metric, string> = { e1rm: 'kg', top: 'kg', volume: 'kg', reps: 'tekrar' };
 
 function Delta({ value, unit }: { value: number; unit: string }) {
   if (Math.abs(value) < 0.05) return <T v="tiny">Değişim yok</T>;
@@ -44,7 +44,8 @@ function Delta({ value, unit }: { value: number; unit: string }) {
   );
 }
 
-export function ProgressTab() {
+/** Kaydı olan egzersizlerin listesi: son değer, değişim ve küçük eğilim çizgisi. */
+export function ExerciseList() {
   const { db } = useDB();
   const nav = useNav();
   const { map } = useExercises();
@@ -62,17 +63,15 @@ export function ProgressTab() {
     });
   }, [index, map]);
 
+  if (rows.length === 0) {
+    return (
+      <Empty icon="trend" title="Henüz veri yok" text="Antrenman kaydettikçe her egzersizin kuvvet ve hacim grafiği burada oluşur." />
+    );
+  }
+
   return (
-    <Screen title="İlerleme">
-      {rows.length === 0 ? (
-        <Empty
-          icon="trend"
-          title="Henüz veri yok"
-          text="Antrenman kaydettikçe her egzersizin kuvvet ve hacim grafiği burada oluşur."
-        />
-      ) : (
-        <T v="small">Egzersize dokununca grafik ve geçmiş açılır.</T>
-      )}
+    <>
+      <T v="small">Egzersize dokununca grafik ve geçmiş açılır.</T>
       {rows.map((r) => {
         const m = mainMetric(r.sessions);
         const vals = r.sessions.map((s) => metricOf(s, m));
@@ -100,7 +99,7 @@ export function ProgressTab() {
           </Card>
         );
       })}
-    </Screen>
+    </>
   );
 }
 
@@ -113,6 +112,7 @@ export function ExerciseProgressScreen({ exerciseId }: { exerciseId: string }) {
   const weighted = sessions.some((s) => s.weighted);
   const [metricSel, setMetricSel] = useState<Metric>('e1rm');
   const metric: Metric = weighted ? metricSel : 'reps';
+  const rangeStart = useRangeStart();
 
   // Tekrar aralığı: egzersizin en son kullanıldığı antrenmandaki aralık.
   const range = useMemo(() => {
@@ -146,6 +146,7 @@ export function ExerciseProgressScreen({ exerciseId }: { exerciseId: string }) {
   const stalled = isStalled(sessions);
   const unit = METRIC_UNIT[metric];
   const big = (n: number) => (metric === 'volume' ? fmtInt(n) : fmtNum(n, 1));
+  const inRange = sessions.filter((s) => s.date >= rangeStart);
 
   return (
     <Screen title={title} onBack={nav.pop} overlay>
@@ -160,26 +161,26 @@ export function ExerciseProgressScreen({ exerciseId }: { exerciseId: string }) {
         </View>
       ) : null}
 
-      {weighted ? (
-        <Segmented
-          value={metricSel}
-          onChange={setMetricSel}
-          options={[
-            { key: 'e1rm', label: 'Tahmini 1RM' },
-            { key: 'top', label: 'En ağır' },
-            { key: 'volume', label: 'Hacim' },
-          ]}
-        />
-      ) : null}
-
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <StatTile label="Rekor" value={big(best)} unit={unit} sub={fmtDate(bestSession.date)} />
         <StatTile label="Son" value={big(vals[vals.length - 1])} unit={unit} sub={relDay(lastS.date)} />
         <StatTile label="Seans" value={String(sessions.length)} />
       </View>
 
-      <Card>
-        <T v="label" style={{ marginBottom: 6 }}>{METRIC_LABEL[metric]}</T>
+      <Card style={{ gap: 10 }}>
+        {weighted ? (
+          <Segmented
+            value={metricSel}
+            onChange={setMetricSel}
+            options={[
+              { key: 'e1rm', label: 'Tahmini 1RM' },
+              { key: 'top', label: 'En ağır' },
+              { key: 'volume', label: 'Hacim' },
+            ]}
+          />
+        ) : (
+          <T v="label">{METRIC_LABEL[metric]}</T>
+        )}
         <LineChart
           unit={unit}
           formatX={fmtDayNumber}
@@ -187,13 +188,14 @@ export function ExerciseProgressScreen({ exerciseId }: { exerciseId: string }) {
             {
               key: metric,
               label: METRIC_LABEL[metric],
-              color: C.accent,
-              points: sessions.map((s) => ({ x: dayNumber(s.date), y: metricOf(s, metric) })),
+              color: SERIES[0],
+              points: inRange.map((s) => ({ x: dayNumber(s.date), y: metricOf(s, metric) })),
             },
           ]}
         />
+        <RangePicker />
         {metric === 'e1rm' ? (
-          <T v="tiny" style={{ marginTop: 8, lineHeight: 17 }}>
+          <T v="tiny" style={{ lineHeight: 17 }}>
             Tahmini 1RM, en iyi setinden hesaplanan tek tekrarlık en yüksek kilodur. Kilo ya da tekrar artınca yükselir.
           </T>
         ) : null}

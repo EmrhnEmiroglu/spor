@@ -18,7 +18,6 @@ export function WorkoutTab() {
   const now = useNow(30000);
 
   const week = useMemo(() => weekSummary(db), [db]);
-  const volChange = week.volumePrev7 > 0 ? ((week.volume7 - week.volumePrev7) / week.volumePrev7) * 100 : null;
 
   const lastByDay = useMemo(() => {
     const m = new Map<string, string>();
@@ -70,16 +69,13 @@ export function WorkoutTab() {
           sub={week.count >= week.goal ? 'Hedef tamam' : `${week.goal - week.count} kaldı`}
         />
         <StatTile label="Seri" value={String(week.streak)} unit="hafta" sub="üst üste" />
-        <StatTile
-          label="7 günlük hacim"
-          value={volChange == null ? '—' : `${volChange > 0 ? '+' : volChange < 0 ? '−' : ''}%${Math.abs(Math.round(volChange))}`}
-          sub="öncekine göre"
-        />
+        <StatTile label="Bu hafta set" value={String(week.sets)} sub={`geçen hafta ${week.setsPrev}`} />
       </View>
-      <T v="tiny">
-        Bu hafta {week.sets} set
-        {week.cardioCount ? ` · ${week.cardioCount} kardiyo, ${week.cardioMinutes} dk` : ''}
-      </T>
+      {week.cardioCount ? (
+        <T v="tiny">
+          Bu hafta {week.cardioCount} kardiyo, {week.cardioMinutes} dk
+        </T>
+      ) : null}
 
       {db.active && activeStats ? (
         <Card style={{ borderColor: C.accent, gap: 10 }}>

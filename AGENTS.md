@@ -30,6 +30,7 @@ Kişisel antrenman takip uygulaması. Arayüz dili Türkçe. Birincil hedef, iPh
 - Veriler yalnızca cihazda durur: `src/store.tsx`, AsyncStorage anahtarı `spor-db-v1`. Sunucu yok.
 - `app.json` içindeki `experiments.baseUrl` GitHub Pages alt yoluna (`/spor`) göre ayarlıdır.
 - `public/sw.js` ve `public/index.html` çevrimdışı önbelleği yönetir.
+- Program iki düzende çalışır: hiçbir güne hafta günü atanmadıysa günler sırayla döner (`nextDayId`); atandıysa haftalık plan geçerlidir (`ProgramDay.weekdays`, `todayPlan`, `assignWeekday` — hepsi `src/actions.ts`).
 
 ## İstatistik kuralları
 

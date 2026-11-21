@@ -15,6 +15,7 @@ export type Route =
   | { name: 'swap'; workoutId: string | null; entryIndex: number }
   | { name: 'plates'; weight: number | null }
   | { name: 'muscleTargets' }
+  | { name: 'schedule' }
   | { name: 'cardio'; id: string | null; date: string };
 
 export type StackItem = Route & { key: string };

@@ -2,9 +2,11 @@ import React, { useState } from 'react';
 import { View } from 'react-native';
 import { useDB } from '../store';
 import { useNav } from '../nav';
-import { Btn, Card, Chip, DatePicker, NumInput, Screen, Stepper, T, useDialog } from '../ui';
+import { Btn, Card, Chip, DatePicker, Empty, NumInput, Screen, Stepper, T, Tag, useDialog } from '../ui';
+import { C } from '../theme';
+import { WEEKDAY_NAMES, assignWeekday, scheduleOf, weekdayIndex } from '../actions';
 import { CARDIO_KINDS, MUSCLES } from '../data/muscles';
-import { DEFAULT_TARGETS, fmtNum, targetOf, uid } from '../logic';
+import { DEFAULT_TARGETS, fmtNum, targetOf, todayStr, uid } from '../logic';
 import { MuscleId } from '../types';
 
 /** Her kas için haftalık set hedef aralığını düzenler. */
@@ -109,6 +111,73 @@ export function CardioScreen({ id, date }: { id: string | null; date: string }) 
       </View>
       {pace ? <T v="small">Tempo: kilometre başına {fmtNum(pace, 1)} dakika</T> : null}
       {existing ? <Btn label="Kaydı sil" kind="ghost" onPress={remove} style={{ marginTop: 8 }} /> : null}
+    </Screen>
+  );
+}
+
+/** Haftanın her gününe bir program günü atar. Atanmayan günler dinlenme günüdür. */
+export function ScheduleScreen() {
+  const { db, update } = useDB();
+  const nav = useNav();
+  const dialog = useDialog();
+  const sched = scheduleOf(db);
+  const todayIdx = weekdayIndex(todayStr());
+  const planned = sched.filter((x) => x != null).length;
+
+  const clear = async () => {
+    const ok = await dialog.confirm({
+      title: 'Haftalık plan temizlensin mi?',
+      message: 'Günler yine sırayla dönmeye başlar. Program günlerin ve geçmişin silinmez.',
+      confirmLabel: 'Temizle',
+    });
+    if (ok) update((d) => d.days.forEach((day) => void (day.weekdays = [])));
+  };
+
+  if (db.days.length === 0) {
+    return (
+      <Screen title="Haftalık plan" onBack={nav.pop} overlay>
+        <Empty
+          icon="calendar"
+          title="Önce program günü oluştur"
+          text="Ana ekrandan hazır bir program ekle ya da kendi günlerini oluştur. Sonra onları buradan haftanın günlerine atarsın."
+        />
+      </Screen>
+    );
+  }
+
+  return (
+    <Screen title="Haftalık plan" onBack={nav.pop} overlay right={<Btn label="Tamam" small onPress={nav.pop} />}>
+      <T v="small" style={{ lineHeight: 19 }}>
+        Her gün için ne yapacağını seç. Seçmediğin günler dinlenme günü olur. Ana ekran o günün antrenmanını gösterir.
+      </T>
+      {WEEKDAY_NAMES.map((name, i) => {
+        const cur = sched[i];
+        return (
+          <Card key={name} style={{ gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <T v="h2">{name}</T>
+              {i === todayIdx ? <Tag label="BUGÜN" color={C.onAccent} bg={C.accent} /> : null}
+            </View>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              <Chip label="Dinlenme" selected={!cur} onPress={() => update((d) => assignWeekday(d, i, null))} />
+              {db.days.map((day) => (
+                <Chip
+                  key={day.id}
+                  label={day.name || 'Adsız gün'}
+                  selected={cur?.id === day.id}
+                  onPress={() => update((d) => assignWeekday(d, i, day.id))}
+                />
+              ))}
+            </View>
+          </Card>
+        );
+      })}
+      <T v="tiny" style={{ lineHeight: 17 }}>
+        {planned > 0
+          ? `Haftada ${planned} antrenman planlandı. Haftalık hedefin de ${planned} olarak ayarlandı.`
+          : 'Hiçbir güne atama yapılmadı. Bu durumda günler sırayla döner.'}
+      </T>
+      {planned > 0 ? <Btn label="Planı temizle" kind="ghost" onPress={clear} /> : null}
     </Screen>
   );
 }

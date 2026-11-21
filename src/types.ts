@@ -36,6 +36,8 @@ export interface ProgramDay {
   id: string;
   name: string;
   items: PlanItem[];
+  /** Haftalık planda bu güne atanan hafta günleri: 0 = Pazartesi, 6 = Pazar. */
+  weekdays?: number[];
 }
 
 export interface SetEntry {

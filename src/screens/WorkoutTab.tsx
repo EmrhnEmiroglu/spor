@@ -7,7 +7,16 @@ import { Btn, Card, Icon, IconBtn, Screen, SectionTitle, T, useDialog, useNow } 
 import { C } from '../theme';
 import { PROGRAM_TEMPLATES } from '../data/exercises';
 import { MUSCLE_NAME } from '../data/muscles';
-import { addTemplate, countDone, nextDayId, workoutFromDay } from '../actions';
+import {
+  WEEKDAY_NAMES,
+  WEEKDAY_SHORT,
+  addTemplate,
+  countDone,
+  scheduleOf,
+  todayPlan,
+  weekdayIndex as weekDayIndexOf,
+  workoutFromDay,
+} from '../actions';
 import { addDays, dayMuscles, fmtMinutes, relDay, todayStr, uid, weekStart, weekSummary, workoutStats } from '../logic';
 import { ProgramDay } from '../types';
 
@@ -30,7 +39,7 @@ export function WorkoutTab() {
     return m;
   }, [db.workouts]);
 
-  const nextId = useMemo(() => nextDayId(db), [db]);
+  const plan = useMemo(() => todayPlan(db), [db]);
 
   const start = async (day: ProgramDay | null) => {
     if (db.active) {
@@ -61,8 +70,13 @@ export function WorkoutTab() {
 
   const activeStats = db.active ? workoutStats(db.active, now) : null;
 
-  // Sıradaki gün büyük kartta gösterilir; devam eden antrenman varken gösterilmez.
-  const hero = !db.active ? db.days.find((d) => d.id === nextId && d.items.length > 0) ?? null : null;
+  // Büyük kartta bugünün (plan yoksa sıradaki) günü gösterilir; devam eden antrenman varken gösterilmez.
+  const heroDay = plan.kind === 'rotation' || plan.kind === 'today' || plan.kind === 'missed' ? plan.day : null;
+  const hero = !db.active && heroDay && heroDay.items.length > 0 ? heroDay : null;
+  const heroLabel = plan.kind === 'today' ? 'Bugünkü antrenman' : plan.kind === 'missed' ? 'Dünden kalan antrenman' : 'Sıradaki antrenman';
+  const upcoming = plan.kind === 'rest' || plan.kind === 'done' ? plan.next : null;
+  const todayIndex = weekDayIndexOf(todayStr());
+  const scheduled = plan.kind !== 'rotation';
   const heroMuscles = hero
     ? dayMuscles(hero, map)
         .slice(0, 5)
@@ -76,11 +90,20 @@ export function WorkoutTab() {
     const start = weekStart(today);
     const worked = new Set(db.workouts.map((w) => w.date));
     const cardio = new Set(db.cardio.map((c) => c.date));
-    return ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map((label, i) => {
+    const sched = scheduleOf(db);
+    return WEEKDAY_SHORT.map((label, i) => {
       const date = addDays(start, i);
-      return { label, date, workout: worked.has(date), cardio: cardio.has(date), today: date === today, future: date > today };
+      return {
+        label,
+        date,
+        workout: worked.has(date),
+        cardio: cardio.has(date),
+        today: date === today,
+        future: date > today,
+        planned: sched[i],
+      };
     });
-  }, [db.workouts, db.cardio]);
+  }, [db.workouts, db.cardio, db.days]);
 
   return (
     <Screen title="Antrenman" right={<IconBtn name="settings" label="Ayarlar" onPress={() => nav.push({ name: 'settings' })} />}>
@@ -116,19 +139,36 @@ export function WorkoutTab() {
                   alignItems: 'center',
                   justifyContent: 'center',
                   backgroundColor: d.workout ? C.accent : 'transparent',
-                  borderWidth: d.workout ? 0 : 1,
-                  borderColor: d.today ? C.text2 : d.future ? C.border : C.borderStrong,
+                  borderWidth: d.workout ? 0 : d.planned && !d.future && !d.today ? 1 : d.planned ? 1.5 : 1,
+                  // Planlı ve henüz gelmemiş günler vurgu rengiyle çerçevelenir.
+                  borderColor: d.planned && (d.today || d.future) ? C.accent : d.today ? C.text2 : d.future ? C.border : C.borderStrong,
                 }}
               >
                 {d.workout ? (
                   <Icon name="check" size={15} color="#ffffff" width={3} />
                 ) : d.cardio ? (
                   <Icon name="heart" size={13} color={C.text2} />
+                ) : d.planned && !d.future && !d.today ? (
+                  <Icon name="minus" size={13} color={C.muted} />
                 ) : null}
               </View>
+              {scheduled ? (
+                <T v="tiny" color={d.planned ? C.text2 : C.muted} style={{ fontSize: 10 }} numberOfLines={1}>
+                  {d.planned ? (d.planned.name.trim().split(' ')[0] || 'Gün').slice(0, 6) : '–'}
+                </T>
+              ) : null}
             </View>
           ))}
         </View>
+        {db.days.length ? (
+          <Btn
+            label={scheduled ? 'Haftalık planı düzenle' : 'Günleri haftaya ata'}
+            icon="calendar"
+            kind="ghost"
+            small
+            onPress={() => nav.push({ name: 'schedule' })}
+          />
+        ) : null}
       </Card>
 
       {db.active && activeStats ? (
@@ -148,7 +188,7 @@ export function WorkoutTab() {
       {hero ? (
         <Card style={{ gap: 10, backgroundColor: C.accentDim, borderColor: C.accent }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <T v="label" color={C.text2}>Sıradaki antrenman</T>
+            <T v="label" color={C.text2}>{heroLabel}</T>
             <IconBtn name="edit" label="Günü düzenle" color={C.text2} onPress={() => nav.push({ name: 'dayEdit', dayId: hero.id })} />
           </View>
           <T v="h1">{hero.name}</T>
@@ -160,6 +200,18 @@ export function WorkoutTab() {
             {lastByDay.get(hero.id) ? `Son yapılış: ${relDay(lastByDay.get(hero.id) as string).toLocaleLowerCase('tr')}` : 'Henüz yapılmadı'}
           </T>
           <Btn label="Antrenmanı başlat" icon="play" onPress={() => start(hero)} style={{ marginTop: 4 }} />
+        </Card>
+      ) : null}
+
+      {!db.active && (plan.kind === 'rest' || plan.kind === 'done') ? (
+        <Card style={{ gap: 6 }}>
+          <T v="label">{plan.kind === 'done' ? 'Bugünkü antrenman tamam' : 'Bugün dinlenme günü'}</T>
+          <T v="h2">
+            {upcoming
+              ? `Sıradaki: ${upcoming.inDays === 1 ? 'Yarın' : WEEKDAY_NAMES[(upcoming.inDays + todayIndex) % 7]} · ${upcoming.day.name}`
+              : 'Planlı başka gün yok'}
+          </T>
+          <T v="small">İstersen aşağıdan bir günü yine de başlatabilirsin.</T>
         </Card>
       ) : null}
 
@@ -202,7 +254,10 @@ export function WorkoutTab() {
                   <T v="small" numberOfLines={1}>
                     {day.items.length} egzersiz{muscles ? ` · ${muscles}` : ''}
                   </T>
-                  <T v="tiny">{lastDate ? `Son: ${relDay(lastDate)}` : 'Henüz yapılmadı'}</T>
+                  <T v="tiny">
+                    {day.weekdays?.length ? `${day.weekdays.map((w) => WEEKDAY_SHORT[w]).join(', ')} · ` : ''}
+                    {lastDate ? `Son: ${relDay(lastDate)}` : 'Henüz yapılmadı'}
+                  </T>
                 </View>
                 <IconBtn name="edit" label="Günü düzenle" onPress={() => nav.push({ name: 'dayEdit', dayId: day.id })} />
                 <Btn label="Başlat" small kind="secondary" onPress={() => start(day)} disabled={day.items.length === 0} />

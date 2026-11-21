@@ -4,6 +4,7 @@ import { useDB, useExercises } from '../store';
 import { useNav } from '../nav';
 import { Btn, Card, Empty, Field, IconBtn, Screen, Stepper, T, useDialog } from '../ui';
 import { ProgramDay } from '../types';
+import { WEEKDAY_NAMES } from '../actions';
 
 export function DayEditScreen({ dayId }: { dayId: string }) {
   const { db, update } = useDB();
@@ -71,6 +72,16 @@ export function DayEditScreen({ dayId }: { dayId: string }) {
           <IconBtn name="arrow-down" label="Günü sona al" disabled={idx === db.days.length - 1} onPress={() => moveDay(1)} />
         </View>
       </View>
+
+      <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <T v="tiny">Haftalık plandaki günleri</T>
+          <T v="body" style={{ marginTop: 2 }}>
+            {day.weekdays?.length ? day.weekdays.map((w) => WEEKDAY_NAMES[w]).join(', ') : 'Atanmadı'}
+          </T>
+        </View>
+        <Btn label="Planı aç" kind="secondary" small onPress={() => nav.push({ name: 'schedule' })} />
+      </Card>
 
       {day.items.length === 0 ? (
         <Empty

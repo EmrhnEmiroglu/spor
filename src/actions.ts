@@ -1,5 +1,5 @@
 import { DB, ProgramDay, SetEntry, Workout, WorkoutEntry } from './types';
-import { parseDate, todayStr, uid } from './logic';
+import { addDays, parseDate, todayStr, uid } from './logic';
 import { ProgramTemplate } from './data/exercises';
 
 export const emptySet = (): SetEntry => ({ weight: null, reps: null, done: false });
@@ -69,4 +69,75 @@ export function nextDayId(d: DB): string | null {
   if (!done.length) return d.days[0].id;
   const idx = d.days.findIndex((x) => x.id === done[0].dayId);
   return d.days[(idx + 1) % d.days.length].id;
+}
+
+// ---------- Haftalık plan ----------
+
+export const WEEKDAY_NAMES = ['Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+export const WEEKDAY_SHORT = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+
+/** Tarihin hafta günü: 0 = Pazartesi, 6 = Pazar. */
+export function weekdayIndex(date: string): number {
+  return (parseDate(date).getDay() + 6) % 7;
+}
+
+/** Haftanın yedi günü için atanmış program günü (yoksa null). */
+export function scheduleOf(d: DB): (ProgramDay | null)[] {
+  return [0, 1, 2, 3, 4, 5, 6].map((i) => d.days.find((x) => x.weekdays?.includes(i)) ?? null);
+}
+
+/**
+ * Bir hafta gününe program günü atar (null: dinlenme). Her hafta gününde en fazla bir
+ * program günü olur. Haftalık antrenman hedefi planlanan gün sayısına eşitlenir.
+ */
+export function assignWeekday(d: DB, weekday: number, dayId: string | null): void {
+  for (const day of d.days) {
+    const without = (day.weekdays ?? []).filter((w) => w !== weekday);
+    day.weekdays = day.id === dayId ? [...without, weekday].sort((a, b) => a - b) : without;
+  }
+  const planned = d.days.reduce((a, day) => a + (day.weekdays?.length ?? 0), 0);
+  if (planned > 0) d.settings.weeklyGoal = planned;
+}
+
+export interface Upcoming {
+  day: ProgramDay;
+  date: string;
+  /** Bugünden kaç gün sonra (1 = yarın). */
+  inDays: number;
+}
+
+export type TodayPlan =
+  /** Haftalık plan yok: günler sırayla döner. */
+  | { kind: 'rotation'; day: ProgramDay | null }
+  | { kind: 'today'; day: ProgramDay }
+  /** Dün planlıydı ama yapılmadı, bugün boş. */
+  | { kind: 'missed'; day: ProgramDay }
+  | { kind: 'done'; day: ProgramDay; next: Upcoming | null }
+  | { kind: 'rest'; next: Upcoming | null };
+
+/** Bugün ne yapılacağını haftalık plana (yoksa sıraya) göre söyler. */
+export function todayPlan(d: DB): TodayPlan {
+  const sched = scheduleOf(d);
+  if (sched.every((x) => x == null)) {
+    const id = nextDayId(d);
+    return { kind: 'rotation', day: d.days.find((x) => x.id === id) ?? null };
+  }
+  const today = todayStr();
+  const doneOn = (dayId: string, date: string) => d.workouts.some((w) => w.dayId === dayId && w.date === date);
+
+  let next: Upcoming | null = null;
+  for (let i = 1; i <= 7 && !next; i++) {
+    const date = addDays(today, i);
+    const day = sched[weekdayIndex(date)];
+    if (day) next = { day, date, inDays: i };
+  }
+
+  const planned = sched[weekdayIndex(today)];
+  if (planned) return doneOn(planned.id, today) ? { kind: 'done', day: planned, next } : { kind: 'today', day: planned };
+
+  const yesterday = addDays(today, -1);
+  const missed = sched[weekdayIndex(yesterday)];
+  const trainedToday = d.workouts.some((w) => w.date === today);
+  if (missed && !trainedToday && !doneOn(missed.id, yesterday)) return { kind: 'missed', day: missed };
+  return { kind: 'rest', next };
 }

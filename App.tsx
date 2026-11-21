@@ -9,7 +9,7 @@ import { C } from './src/theme';
 import { fmtClock, fmtMinutes, workoutStats } from './src/logic';
 import { TimerProvider, useRestState } from './src/timer';
 import { PlatesScreen, SwapScreen } from './src/screens/Tools';
-import { CardioScreen, MuscleTargetsScreen } from './src/screens/Extras';
+import { CardioScreen, MuscleTargetsScreen, ScheduleScreen } from './src/screens/Extras';
 import { WorkoutTab } from './src/screens/WorkoutTab';
 import { HistoryTab, WorkoutDetailScreen } from './src/screens/HistoryTab';
 import { MusclesTab } from './src/screens/MusclesTab';
@@ -51,6 +51,8 @@ function renderRoute(r: StackItem) {
       return <PlatesScreen weight={r.weight} />;
     case 'muscleTargets':
       return <MuscleTargetsScreen />;
+    case 'schedule':
+      return <ScheduleScreen />;
     case 'cardio':
       return <CardioScreen id={r.id} date={r.date} />;
   }

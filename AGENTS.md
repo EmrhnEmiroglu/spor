@@ -21,13 +21,20 @@ npx expo-doctor             # diagnose dependency and config issues
 npx expo install --fix      # fix incompatible package versions
 ```
 
-Run lint and typecheck before declaring any task done.
+Run typecheck (`npm run typecheck`) before declaring any task done.
+
+## Bu proje hakkında
+
+Kişisel antrenman takip uygulaması. Arayüz dili Türkçe. Birincil hedef, iPhone ana ekranına eklenen çevrimdışı web uygulaması (`npm run build:web`, çıktı `dist/`). Aynı kod ileride EAS ile yerel iOS/Android uygulamasına derlenebilir, bu yüzden yalnızca web'de çalışan API'ler `Platform.OS === 'web'` denetimi arkasında tutulur.
+
+- Veriler yalnızca cihazda durur: `src/store.tsx`, AsyncStorage anahtarı `spor-db-v1`. Sunucu yok.
+- `app.json` içindeki `experiments.baseUrl` GitHub Pages alt yoluna (`/spor`) göre ayarlıdır.
+- `public/sw.js` ve `public/index.html` çevrimdışı önbelleği yönetir.
 
 ## Navigation & Routing
 
-- Use **Expo Router** for all navigation. Routes live in `src/app/` — every file there is a screen, `_layout.tsx` files define navigators. Keep non-route code (components, hooks, utils) outside `src/app/`.
-- Import `Link`, `router`, and `useLocalSearchParams` from `expo-router`.
-- Docs: https://docs.expo.dev/router/introduction.md
+- Expo Router **kullanılmıyor**. Tek sayfalık yapı: sekmeler ve üst üste açılan ekranlar `src/nav.tsx` içindeki basit yığınla yönetilir, ekranlar `App.tsx` içinde eşlenir. Yeni ekran eklerken `Route` tipine ekle ve `renderRoute` içinde karşılığını yaz.
+- Onay pencereleri için `Alert` yerine `useDialog()` kullan; `Alert` web'de çalışmaz.
 
 ## Building with EAS
 

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
-import Svg, { Ellipse } from 'react-native-svg';
+import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
 import { MuscleId } from './types';
 import { C, heatColor } from './theme';
 
@@ -12,6 +12,8 @@ import { C, heatColor } from './theme';
  * çizilir. Hazır 3D model ya da ek kütüphane kullanılmaz.
  *
  * Eksenler: x sağa, y aşağı, z izleyiciye doğru. Model 0 derecede öne bakar.
+ * Oranlar yaklaşık yedi buçuk baş boyundaki atletik bir vücuda göredir:
+ * çene 46, omuz 68, göğüs ucu 98, göbek 152, kasık 206, diz 300, taban 400.
  */
 
 interface Part {
@@ -29,53 +31,60 @@ interface Part {
 
 const PARTS: Part[] = [
   // Baş ve boyun
-  { m: null, c: [0, 24, 2], r: [15, 19, 17] },
-  { m: null, c: [0, 50, -1], r: [9.5, 12, 10] },
+  { m: null, c: [0, 24, 2], r: [16, 22, 19] },
+  { m: null, c: [0, 52, -2], r: [10, 11, 10.5] },
 
   // Gövde dolgusu: kasların arasındaki boşlukları kapatır
-  { m: null, c: [0, 96, 0], r: [36, 36, 21] },
-  { m: null, c: [0, 146, 1], r: [29, 34, 18] },
-  { m: null, c: [0, 192, 0], r: [32, 20, 19] },
+  { m: null, c: [0, 98, 0], r: [35, 36, 20] },
+  { m: null, c: [0, 148, 1], r: [28, 32, 16.5] },
+  { m: null, c: [0, 190, 0], r: [30, 21, 18] },
 
   // Trapez: boyundan omuza inen kısım ve kürek kemikleri arası
-  { m: 'traps', c: [17, 62, -5], r: [19, 8, 11], tilt: 18, mirror: true },
-  { m: 'traps', c: [0, 86, -20], r: [13, 27, 6] },
+  { m: 'traps', c: [18, 63, -5], r: [19, 8.5, 11], tilt: 18, mirror: true },
+  { m: 'traps', c: [0, 89, -19.5], r: [13, 28, 6] },
 
-  // Omuz
-  { m: 'shoulders', c: [46, 76, 0], r: [14, 15.5, 16], mirror: true },
+  // Omuz: ön, yan ve arka baş
+  { m: 'shoulders', c: [42, 77, 8], r: [10, 14, 9], mirror: true },
+  { m: 'shoulders', c: [49, 77, 0], r: [9.5, 15.5, 11], mirror: true },
+  { m: 'shoulders', c: [43, 78, -9], r: [10, 14, 9], mirror: true },
 
-  // Göğüs
-  { m: 'chest', c: [17, 91, 17], r: [19, 15, 9], tilt: -6, mirror: true },
+  // Göğüs: üst ve alt
+  { m: 'chest', c: [19, 85, 15.5], r: [17, 9, 7.5], tilt: -12, mirror: true },
+  { m: 'chest', c: [17.5, 97, 17.5], r: [18.5, 12.5, 9], tilt: -4, mirror: true },
 
   // Üst sırt ve kanat
-  { m: 'upperBack', c: [24, 90, -18], r: [15, 15, 8], mirror: true },
-  { m: 'lats', c: [30, 123, -12], r: [13, 27, 13], tilt: 10, mirror: true },
+  { m: 'upperBack', c: [24, 91, -17.5], r: [15, 15, 8], mirror: true },
+  { m: 'lats', c: [30, 125, -11.5], r: [13, 28, 13], tilt: 10, mirror: true },
 
-  // Karın: altılı, alt karın ve yanlar
-  { m: 'abs', c: [8, 121, 18], r: [7.5, 9, 5], mirror: true },
-  { m: 'abs', c: [8, 140, 19], r: [7.5, 9, 5], mirror: true },
-  { m: 'abs', c: [7.5, 159, 18.5], r: [7, 9, 5], mirror: true },
-  { m: 'abs', c: [0, 178, 16], r: [11, 10, 5] },
-  { m: 'abs', c: [25, 150, 8], r: [7, 23, 13], tilt: 4, mirror: true },
+  // Karın: dört sıra, alt karın ve yanlar
+  { m: 'abs', c: [8, 119, 17.5], r: [8, 8.6, 4.5], mirror: true },
+  { m: 'abs', c: [8, 135.5, 18.2], r: [8, 8.6, 4.5], mirror: true },
+  { m: 'abs', c: [7.8, 152, 18], r: [7.8, 8.6, 4.5], mirror: true },
+  { m: 'abs', c: [7.2, 168, 17], r: [7.2, 8.6, 4.5], mirror: true },
+  { m: 'abs', c: [0, 184, 14.5], r: [12, 10, 5] },
+  { m: 'abs', c: [25, 152, 8], r: [8, 26, 13], tilt: 5, mirror: true },
 
   // Bel
-  { m: 'lowerBack', c: [9, 156, -16], r: [9, 23, 6], mirror: true },
+  { m: 'lowerBack', c: [9, 157, -15.5], r: [9, 23, 6], mirror: true },
 
-  // Kalça
-  { m: 'glutes', c: [16, 200, -13], r: [17, 18, 14], mirror: true },
+  // Kalça: ana kas ve üst yan kısım
+  { m: 'glutes', c: [16, 202, -13], r: [17, 18.5, 14], mirror: true },
+  { m: 'glutes', c: [24, 185, -8], r: [11, 11, 11], mirror: true },
 
-  // Üst kol: dolgu, ön ve arka
+  // Üst kol: dolgu, ön kol kası ve arka kolun iki başı
   { m: null, c: [54.5, 116, 0], r: [8, 25, 8], tilt: -7, mirror: true },
-  { m: 'biceps', c: [53.5, 115, 7], r: [8.5, 22, 8.5], tilt: -7, mirror: true },
-  { m: 'triceps', c: [55.5, 114, -7], r: [9, 25, 9], tilt: -7, mirror: true },
-  { m: null, c: [59, 146, 0], r: [7.5, 8, 8], mirror: true },
+  { m: 'biceps', c: [53.5, 114, 7], r: [8.5, 21, 8.5], tilt: -7, mirror: true },
+  { m: 'triceps', c: [52, 113, -7.5], r: [7.5, 24, 8], tilt: -7, mirror: true },
+  { m: 'triceps', c: [59, 109, -4], r: [6.5, 18, 7.5], tilt: -7, mirror: true },
+  { m: null, c: [59.5, 146, 0], r: [7.5, 8, 8], mirror: true },
 
   // Ön kol ve el
-  { m: 'forearms', c: [62, 166, 2], r: [9, 20, 9.5], tilt: -6, mirror: true },
-  { m: 'forearms', c: [65, 189, 2], r: [6.5, 15, 6.5], tilt: -5, mirror: true },
-  { m: null, c: [67.5, 211, 4], r: [6.5, 11, 5], tilt: -4, mirror: true },
+  { m: 'forearms', c: [64, 165, 1], r: [7.5, 20, 9], tilt: -6, mirror: true },
+  { m: 'forearms', c: [59.5, 168, 3], r: [6.5, 19, 8], tilt: -6, mirror: true },
+  { m: 'forearms', c: [65.5, 190, 2], r: [6, 14, 6.5], tilt: -5, mirror: true },
+  { m: null, c: [68, 216, 4], r: [6.5, 14, 5], tilt: -4, mirror: true },
 
-  // Üst bacak: dolgu, iç bacak, dört başlı kasın üç görünür başı, arka bacak
+  // Üst bacak: dolgu, iç bacak, ön bacağın üç görünür başı, arka bacak
   { m: null, c: [18, 250, 0], r: [14, 42, 12], tilt: 2, mirror: true },
   { m: null, c: [7.5, 234, 0], r: [6.5, 24, 11], mirror: true },
   { m: 'quads', c: [25, 249, 6], r: [9.5, 39, 11], tilt: 3, mirror: true },
@@ -85,11 +94,12 @@ const PARTS: Part[] = [
   { m: 'hamstrings', c: [23.5, 251, -8], r: [8.5, 38, 10.5], tilt: 3, mirror: true },
 
   // Diz, alt bacak ve ayak
-  { m: null, c: [18, 300, 2], r: [11, 10, 11.5], mirror: true },
-  { m: null, c: [18, 338, 4], r: [8.5, 30, 8.5], mirror: true },
-  { m: 'calves', c: [13.5, 330, -8], r: [7, 24, 9], mirror: true },
-  { m: 'calves', c: [22.5, 328, -7], r: [7.5, 25, 9.5], mirror: true },
-  { m: null, c: [19, 390, 9], r: [9, 6.5, 17], mirror: true },
+  { m: null, c: [18, 300, 3], r: [10.5, 10, 11], mirror: true },
+  { m: null, c: [19, 338, 5], r: [8, 30, 8.5], mirror: true },
+  { m: 'calves', c: [13.5, 328, -8], r: [7, 23, 9], mirror: true },
+  { m: 'calves', c: [22.5, 326, -7], r: [7.5, 24, 9.5], mirror: true },
+  { m: null, c: [18, 363, -3], r: [6, 16, 6.5], mirror: true },
+  { m: null, c: [19, 392, 9], r: [9, 6.5, 17], mirror: true },
 ];
 
 type Vec = [number, number, number];
@@ -102,7 +112,7 @@ interface Solid {
 }
 
 /** Ön-arka kalınlık çarpanı: yandan bakışta gövdenin fazla ince görünmemesi için. */
-const DEPTH = 1.22;
+const DEPTH = 1.36;
 
 const rad = (d: number) => (d * Math.PI) / 180;
 
@@ -173,7 +183,7 @@ function project(angle: number): Drawn[] {
   return out.sort((p, q) => p.depth - q.depth);
 }
 
-/** Derinliğe göre karartma: arkadaki şekiller daha koyu görünür. */
+/** Derinliğe göre karartma: arkadaki şekiller biraz daha koyu görünür. */
 function shade(hex: string, k: number): string {
   const n = parseInt(hex.slice(1), 16);
   const ch = (v: number) => Math.round(Math.max(0, Math.min(255, v * k)));
@@ -183,9 +193,9 @@ function shade(hex: string, k: number): string {
   return `rgb(${r},${g},${b})`;
 }
 
-const NEUTRAL = '#30302d';
-const VIEW_W = 170;
-const VIEW_H = 404;
+const NEUTRAL = '#32322f';
+const VIEW_W = 176;
+const VIEW_H = 412;
 const TWO_PI = Math.PI * 2;
 
 function facing(angle: number): string {
@@ -204,9 +214,9 @@ export function Body3D({
   selected: MuscleId | null;
   onSelect: (m: MuscleId) => void;
 }) {
-  const [angle, setAngle] = useState(0.45);
+  const [angle, setAngle] = useState(0.5);
   const [size, setSize] = useState({ w: 0, h: 0 });
-  const drag = useRef({ x: 0, lx: 0, ly: 0, a: 0, moved: false });
+  const drag = useRef({ x: 0, lx: 0, ly: 0, a: 0, moved: false, lastX: 0, lastT: 0, v: 0 });
   const anim = useRef<number | null>(null);
   const angleRef = useRef(angle);
   angleRef.current = angle;
@@ -227,10 +237,26 @@ export function Body3D({
     if (delta > Math.PI) delta -= TWO_PI;
     const t0 = Date.now();
     const step = () => {
-      const t = Math.min(1, (Date.now() - t0) / 380);
+      const t = Math.min(1, (Date.now() - t0) / 420);
       const e = 1 - Math.pow(1 - t, 3);
       setAngle(from + delta * e);
       anim.current = t < 1 ? requestAnimationFrame(step) : null;
+    };
+    anim.current = requestAnimationFrame(step);
+  };
+
+  /** Parmak bırakıldığında model hızını yavaşça kaybederek dönmeye devam eder. */
+  const coast = (velocity: number) => {
+    stopAnim();
+    let v = Math.max(-0.02, Math.min(0.02, velocity));
+    let last = Date.now();
+    const step = () => {
+      const now = Date.now();
+      const dt = Math.min(40, now - last);
+      last = now;
+      setAngle(angleRef.current + v * dt);
+      v *= Math.pow(0.994, dt);
+      anim.current = Math.abs(v) > 0.0004 ? requestAnimationFrame(step) : null;
     };
     anim.current = requestAnimationFrame(step);
   };
@@ -257,40 +283,47 @@ export function Body3D({
   };
 
   const face = facing(angle);
+  const perPixel = size.w ? (Math.PI * 1.4) / size.w : 0;
 
   return (
-    <View style={{ alignItems: 'center', gap: 8 }}>
+    <View style={{ alignItems: 'center', gap: 10 }}>
       <View
-        style={{ width: '100%', maxWidth: 230, aspectRatio: VIEW_W / VIEW_H }}
+        style={{ width: '100%', maxWidth: 250, aspectRatio: VIEW_W / VIEW_H }}
         onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}
       >
         <Svg viewBox={`${-VIEW_W / 2} 0 ${VIEW_W} ${VIEW_H}`} width="100%" height="100%">
+          <Defs>
+            {/* Her şeklin üstüne binen ışık: sol üstte parlak, kenarlarda koyu. Küre hissini verir. */}
+            <RadialGradient id="bodyLight" cx="36%" cy="30%" r="78%">
+              <Stop offset="0" stopColor="#ffffff" stopOpacity={0.22} />
+              <Stop offset="0.45" stopColor="#ffffff" stopOpacity={0} />
+              <Stop offset="0.62" stopColor="#000000" stopOpacity={0} />
+              <Stop offset="1" stopColor="#000000" stopOpacity={0.4} />
+            </RadialGradient>
+            <RadialGradient id="bodyGround" cx="50%" cy="50%" r="50%">
+              <Stop offset="0" stopColor="#000000" stopOpacity={0.55} />
+              <Stop offset="1" stopColor="#000000" stopOpacity={0} />
+            </RadialGradient>
+          </Defs>
+          <Ellipse cx={0} cy={400} rx={62} ry={9} fill="url(#bodyGround)" />
           {drawn.map((d) => {
             const on = d.m != null && d.m === selected;
             const base = d.m ? heatColor(values[d.m] ?? 0) : NEUTRAL;
-            const k = 0.78 + 0.22 * Math.max(0, Math.min(1, (d.depth + 26) / 52));
-            const deg = (d.rot * 180) / Math.PI;
+            const k = 0.8 + 0.2 * Math.max(0, Math.min(1, (d.depth + 26) / 52));
+            const tf = `rotate(${(d.rot * 180) / Math.PI} ${d.cx} ${d.cy})`;
             return (
               <React.Fragment key={d.key}>
+                <Ellipse cx={d.cx} cy={d.cy} rx={d.rx} ry={d.ry} fill={shade(base, k)} transform={tf} />
                 <Ellipse
                   cx={d.cx}
                   cy={d.cy}
                   rx={d.rx}
                   ry={d.ry}
-                  fill={shade(base, k)}
-                  stroke={on ? C.text : C.surface}
-                  strokeWidth={on ? 1.6 : 0.7}
-                  transform={`rotate(${deg} ${d.cx} ${d.cy})`}
-                />
-                {/* Hacim hissi veren parlaklık: sol üstten gelen ışık. */}
-                <Ellipse
-                  cx={d.cx - d.rx * 0.22}
-                  cy={d.cy - d.ry * 0.28}
-                  rx={d.rx * 0.5}
-                  ry={d.ry * 0.5}
-                  fill="#ffffff"
-                  opacity={0.07}
-                  transform={`rotate(${deg} ${d.cx} ${d.cy})`}
+                  fill="url(#bodyLight)"
+                  stroke={on ? '#ffffff' : '#000000'}
+                  strokeOpacity={on ? 1 : 0.28}
+                  strokeWidth={on ? 1.6 : 0.5}
+                  transform={tf}
                 />
               </React.Fragment>
             );
@@ -309,19 +342,33 @@ export function Body3D({
               ly: e.nativeEvent.locationY,
               a: angleRef.current,
               moved: false,
+              lastX: e.nativeEvent.pageX,
+              lastT: Date.now(),
+              v: 0,
             };
           }}
           onResponderMove={(e) => {
-            const dx = e.nativeEvent.pageX - drag.current.x;
-            if (Math.abs(dx) > 5) drag.current.moved = true;
-            if (drag.current.moved && size.w) setAngle(drag.current.a + (dx / size.w) * Math.PI * 1.4);
+            const g = drag.current;
+            const x = e.nativeEvent.pageX;
+            const dx = x - g.x;
+            if (Math.abs(dx) > 5) g.moved = true;
+            if (!g.moved || !perPixel) return;
+            const now = Date.now();
+            const dt = Math.max(1, now - g.lastT);
+            // Son hareketlerin yumuşatılmış hızı (radyan / milisaniye).
+            g.v = g.v * 0.6 + (((x - g.lastX) * perPixel) / dt) * 0.4;
+            g.lastX = x;
+            g.lastT = now;
+            setAngle(g.a + dx * perPixel);
           }}
           onResponderRelease={() => {
-            if (!drag.current.moved) hit(drag.current.lx, drag.current.ly);
+            const g = drag.current;
+            if (!g.moved) hit(g.lx, g.ly);
+            else if (Date.now() - g.lastT < 80 && Math.abs(g.v) > 0.0015) coast(g.v);
           }}
         />
       </View>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View style={{ flexDirection: 'row', backgroundColor: C.surface2, borderRadius: 19, padding: 3 }}>
         {(
           [
             ['Ön', 0],
@@ -335,23 +382,21 @@ export function Body3D({
               key={label}
               onPress={() => turnTo(target)}
               style={{
-                minWidth: 64,
-                minHeight: 34,
+                minWidth: 68,
+                minHeight: 32,
                 paddingHorizontal: 12,
-                borderRadius: 17,
+                borderRadius: 16,
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: on ? C.surface3 : 'transparent',
-                borderWidth: 1,
-                borderColor: C.borderStrong,
               }}
             >
-              <Text style={{ color: on ? C.text : C.text2, fontSize: 13, fontWeight: '600' }}>{label}</Text>
+              <Text style={{ color: on ? C.text : C.muted, fontSize: 13, fontWeight: '600' }}>{label}</Text>
             </Pressable>
           );
         })}
       </View>
-      <Text style={{ color: C.muted, fontSize: 12 }}>Döndürmek için sağa sola sürükle, ayrıntı için kasa dokun.</Text>
+      <Text style={{ color: C.muted, fontSize: 12, textAlign: 'center' }}>Döndürmek için sağa sola sürükle, ayrıntı için kasa dokun.</Text>
     </View>
   );
 }

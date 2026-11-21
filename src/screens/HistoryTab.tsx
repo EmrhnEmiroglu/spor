@@ -242,7 +242,7 @@ export function HistoryTab() {
   );
 }
 
-export function WorkoutDetailScreen({ id }: { id: string }) {
+export function WorkoutDetailScreen({ id, fresh }: { id: string; fresh?: boolean }) {
   const { db, update } = useDB();
   const nav = useNav();
   const dialog = useDialog();
@@ -260,6 +260,19 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
 
   const s = workoutStats(w);
   const timed = w.finishedAt != null && w.finishedAt !== w.startedAt;
+
+  // Bu antrenmanda kırılan rekor sayısı (egzersiz başına en fazla bir).
+  const prCount = w.entries.filter((e) => {
+    const before = sessionsBefore(index.get(e.exerciseId), w);
+    if (!before.length) return false;
+    const bestE = Math.max(...before.map((x) => x.e1rm));
+    const bestR = Math.max(...before.map((x) => x.bestReps));
+    return e.sets.some((x) => {
+      if (!x.done || x.warmup || x.reps == null) return false;
+      const weight = x.weight ?? 0;
+      return weight > 0 ? e1rm(weight, x.reps) > bestE + 0.001 : bestE === 0 && x.reps > bestR;
+    });
+  }).length;
 
   const remove = async () => {
     const ok = await dialog.confirm({
@@ -282,6 +295,19 @@ export function WorkoutDetailScreen({ id }: { id: string }) {
       overlay
       right={<IconBtn name="edit" label="Düzenle" onPress={() => nav.push({ name: 'editor', workoutId: id })} />}
     >
+      {fresh ? (
+        <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: C.goodDim, borderColor: C.good }}>
+          <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.good, alignItems: 'center', justifyContent: 'center' }}>
+            <Icon name="check" size={24} color="#ffffff" width={3} />
+          </View>
+          <View style={{ flex: 1, gap: 2 }}>
+            <T v="h2">Antrenman tamamlandı</T>
+            <T v="small" color={C.text2}>
+              {prCount > 0 ? `${prCount} egzersizde yeni rekor kırdın.` : 'Kayıt geçmişe eklendi.'}
+            </T>
+          </View>
+        </Card>
+      ) : null}
       <T v="small">{fmtDate(w.date, 'full')} · {w.date.slice(0, 4)}</T>
       <View style={{ flexDirection: 'row', gap: 10 }}>
         <StatTile label="Süre" value={timed ? fmtMinutes(s.minutes) : '—'} />

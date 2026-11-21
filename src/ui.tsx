@@ -1,5 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
+  Easing,
   Platform,
   Pressable,
   ScrollView,
@@ -447,6 +449,26 @@ export function NumInput({
         style,
       ]}
     />
+  );
+}
+
+/** İçeriği yumuşakça belirten sarmalayıcı. `slide` verilirse sağdan kayarak gelir. */
+export function Appear({ children, slide = 0 }: { children: React.ReactNode; slide?: number }) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(v, {
+      toValue: 1,
+      duration: slide ? 220 : 160,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: Platform.OS !== 'web',
+    }).start();
+  }, [v, slide]);
+  return (
+    <Animated.View
+      style={{ flex: 1, opacity: v, transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [slide, 0] }) }] }}
+    >
+      {children}
+    </Animated.View>
   );
 }
 

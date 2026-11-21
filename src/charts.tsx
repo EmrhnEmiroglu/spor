@@ -357,6 +357,48 @@ export function Sparkline({ values, width = 64, height = 26, color = SERIES[0] }
   );
 }
 
+// ---------- Halka gösterge ----------
+
+/** Hedefe göre ilerleme halkası. Dolan kısım vurgu rengi, boş kısım aynı tonun koyusu. */
+export function Ring({
+  value,
+  total,
+  size = 84,
+  stroke = 9,
+  children,
+}: {
+  value: number;
+  total: number;
+  size?: number;
+  stroke?: number;
+  children?: React.ReactNode;
+}) {
+  const r = (size - stroke) / 2;
+  const len = 2 * Math.PI * r;
+  const pct = total > 0 ? Math.max(0, Math.min(1, value / total)) : 0;
+  return (
+    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={{ position: 'absolute' }}>
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={C.accentDim} strokeWidth={stroke} fill="none" />
+        {pct > 0 ? (
+          <Circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            stroke={SERIES[0]}
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={`${len * pct} ${len}`}
+            fill="none"
+            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+          />
+        ) : null}
+      </Svg>
+      {children}
+    </View>
+  );
+}
+
 // ---------- Bütünün parçaları ----------
 
 /** Bir toplamın parçalara dağılımı: tek şerit ve altında oranlar. */

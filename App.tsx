@@ -4,7 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DBProvider, useDB } from './src/store';
 import { NavProvider, StackItem, TabId, useNav } from './src/nav';
-import { DialogProvider, Icon, IconName, useNow } from './src/ui';
+import { Appear, DialogProvider, Icon, IconName, useNow } from './src/ui';
 import { C } from './src/theme';
 import { fmtClock, fmtMinutes, workoutStats } from './src/logic';
 import { TimerProvider, useRestState } from './src/timer';
@@ -40,7 +40,7 @@ function renderRoute(r: StackItem) {
     case 'dayEdit':
       return <DayEditScreen dayId={r.dayId} />;
     case 'workoutDetail':
-      return <WorkoutDetailScreen id={r.id} />;
+      return <WorkoutDetailScreen id={r.id} fresh={r.fresh} />;
     case 'exerciseProgress':
       return <ExerciseProgressScreen exerciseId={r.exerciseId} />;
     case 'settings':
@@ -108,9 +108,20 @@ function TabBar() {
             onPress={() => nav.setTab(t.id)}
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
-            style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 56, gap: 3 }}
+            style={{ flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 60, gap: 3 }}
           >
-            <Icon name={t.icon} size={22} color={on ? C.accent : C.muted} />
+            <View
+              style={{
+                width: 54,
+                height: 30,
+                borderRadius: 15,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: on ? C.accentDim : 'transparent',
+              }}
+            >
+              <Icon name={t.icon} size={21} color={on ? C.text : C.muted} />
+            </View>
             <Text style={{ color: on ? C.text : C.muted, fontSize: 11, fontWeight: on ? '700' : '500' }}>{t.label}</Text>
           </Pressable>
         );
@@ -129,19 +140,19 @@ function Root() {
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       <View style={{ flex: 1, display: nav.stack.length ? 'none' : 'flex' }}>
-        <View style={{ flex: 1 }}>
+        <Appear key={nav.tab}>
           {nav.tab === 'workout' ? <WorkoutTab /> : null}
           {nav.tab === 'history' ? <HistoryTab /> : null}
           {nav.tab === 'muscles' ? <MusclesTab /> : null}
           {nav.tab === 'progress' ? <StatsTab /> : null}
           {nav.tab === 'body' ? <BodyTab /> : null}
-        </View>
+        </Appear>
         <ActiveBanner />
         <TabBar />
       </View>
       {nav.stack.map((r, i) => (
-        <View key={r.key} style={[StyleSheet.absoluteFill, { display: i === top ? 'flex' : 'none' }]}>
-          {renderRoute(r)}
+        <View key={r.key} style={[StyleSheet.absoluteFill, { display: i === top ? 'flex' : 'none', backgroundColor: C.bg }]}>
+          <Appear slide={28}>{renderRoute(r)}</Appear>
         </View>
       ))}
     </View>

@@ -1,13 +1,14 @@
 import React, { useMemo } from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
+import { Ring } from '../charts';
 import { useDB, useExercises } from '../store';
 import { useNav } from '../nav';
-import { Btn, Card, IconBtn, Screen, SectionTitle, StatTile, T, Tag, useDialog, useNow } from '../ui';
+import { Btn, Card, Icon, IconBtn, Screen, SectionTitle, T, useDialog, useNow } from '../ui';
 import { C } from '../theme';
 import { PROGRAM_TEMPLATES } from '../data/exercises';
 import { MUSCLE_NAME } from '../data/muscles';
 import { addTemplate, countDone, nextDayId, workoutFromDay } from '../actions';
-import { dayMuscles, fmtMinutes, relDay, todayStr, uid, weekSummary, workoutStats } from '../logic';
+import { addDays, dayMuscles, fmtMinutes, relDay, todayStr, uid, weekStart, weekSummary, workoutStats } from '../logic';
 import { ProgramDay } from '../types';
 
 export function WorkoutTab() {
@@ -60,22 +61,75 @@ export function WorkoutTab() {
 
   const activeStats = db.active ? workoutStats(db.active, now) : null;
 
+  // Sıradaki gün büyük kartta gösterilir; devam eden antrenman varken gösterilmez.
+  const hero = !db.active ? db.days.find((d) => d.id === nextId && d.items.length > 0) ?? null : null;
+  const heroMuscles = hero
+    ? dayMuscles(hero, map)
+        .slice(0, 5)
+        .map((m) => MUSCLE_NAME[m])
+        .join(', ')
+    : '';
+  const listed = hero ? db.days.filter((d) => d.id !== hero.id) : db.days;
+
+  const weekDays = useMemo(() => {
+    const today = todayStr();
+    const start = weekStart(today);
+    const worked = new Set(db.workouts.map((w) => w.date));
+    const cardio = new Set(db.cardio.map((c) => c.date));
+    return ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'].map((label, i) => {
+      const date = addDays(start, i);
+      return { label, date, workout: worked.has(date), cardio: cardio.has(date), today: date === today, future: date > today };
+    });
+  }, [db.workouts, db.cardio]);
+
   return (
     <Screen title="Antrenman" right={<IconBtn name="settings" label="Ayarlar" onPress={() => nav.push({ name: 'settings' })} />}>
-      <View style={{ flexDirection: 'row', gap: 10 }}>
-        <StatTile
-          label="Bu hafta"
-          value={`${week.count}/${week.goal}`}
-          sub={week.count >= week.goal ? 'Hedef tamam' : `${week.goal - week.count} kaldı`}
-        />
-        <StatTile label="Seri" value={String(week.streak)} unit="hafta" sub="üst üste" />
-        <StatTile label="Bu hafta set" value={String(week.sets)} sub={`geçen hafta ${week.setsPrev}`} />
-      </View>
-      {week.cardioCount ? (
-        <T v="tiny">
-          Bu hafta {week.cardioCount} kardiyo, {week.cardioMinutes} dk
-        </T>
-      ) : null}
+      <Card style={{ gap: 16 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <Ring value={week.count} total={week.goal}>
+            <Text style={{ color: C.text, fontSize: 22, fontWeight: '700' }}>
+              {week.count}
+              <Text style={{ color: C.muted, fontSize: 14, fontWeight: '500' }}>/{week.goal}</Text>
+            </Text>
+          </Ring>
+          <View style={{ flex: 1, gap: 3 }}>
+            <T v="label">Bu hafta</T>
+            <T v="h2">{week.count >= week.goal ? 'Haftalık hedef tamam' : `${week.goal - week.count} antrenman kaldı`}</T>
+            <T v="small">
+              {week.sets} set · geçen hafta {week.setsPrev}
+            </T>
+            <T v="small">
+              {week.streak > 0 ? `${week.streak} haftadır hedef tutuyor` : 'Henüz seri yok'}
+              {week.cardioCount ? ` · ${week.cardioMinutes} dk kardiyo` : ''}
+            </T>
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row' }}>
+          {weekDays.map((d) => (
+            <View key={d.date} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
+              <T v="tiny" color={d.today ? C.text : C.muted} style={{ fontWeight: d.today ? '700' : '400' }}>{d.label}</T>
+              <View
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: 15,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: d.workout ? C.accent : 'transparent',
+                  borderWidth: d.workout ? 0 : 1,
+                  borderColor: d.today ? C.text2 : d.future ? C.border : C.borderStrong,
+                }}
+              >
+                {d.workout ? (
+                  <Icon name="check" size={15} color="#ffffff" width={3} />
+                ) : d.cardio ? (
+                  <Icon name="heart" size={13} color={C.text2} />
+                ) : null}
+              </View>
+            </View>
+          ))}
+        </View>
+      </Card>
 
       {db.active && activeStats ? (
         <Card style={{ borderColor: C.accent, gap: 10 }}>
@@ -91,8 +145,26 @@ export function WorkoutTab() {
         </Card>
       ) : null}
 
+      {hero ? (
+        <Card style={{ gap: 10, backgroundColor: C.accentDim, borderColor: C.accent }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <T v="label" color={C.text2}>Sıradaki antrenman</T>
+            <IconBtn name="edit" label="Günü düzenle" color={C.text2} onPress={() => nav.push({ name: 'dayEdit', dayId: hero.id })} />
+          </View>
+          <T v="h1">{hero.name}</T>
+          <T v="small" color={C.text2} numberOfLines={2}>
+            {hero.items.length} egzersiz
+            {heroMuscles ? ` · ${heroMuscles}` : ''}
+          </T>
+          <T v="tiny" color={C.text2}>
+            {lastByDay.get(hero.id) ? `Son yapılış: ${relDay(lastByDay.get(hero.id) as string).toLocaleLowerCase('tr')}` : 'Henüz yapılmadı'}
+          </T>
+          <Btn label="Antrenmanı başlat" icon="play" onPress={() => start(hero)} style={{ marginTop: 4 }} />
+        </Card>
+      ) : null}
+
       <SectionTitle right={db.days.length ? <Btn label="Gün ekle" icon="plus" kind="ghost" small onPress={newDay} /> : null}>
-        Programım
+        {hero ? 'Diğer günler' : 'Programım'}
       </SectionTitle>
 
       {db.days.length === 0 ? (
@@ -114,20 +186,18 @@ export function WorkoutTab() {
           <Btn label="Kendi günümü oluştur" icon="plus" kind="secondary" onPress={newDay} />
         </Card>
       ) : (
-        db.days.map((day) => {
+        listed.map((day) => {
           const muscles = dayMuscles(day, map)
             .slice(0, 4)
             .map((m) => MUSCLE_NAME[m])
             .join(', ');
           const lastDate = lastByDay.get(day.id);
-          const isNext = day.id === nextId && !db.active;
           return (
-            <Card key={day.id} style={isNext ? { borderColor: C.borderStrong } : undefined}>
+            <Card key={day.id}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <View style={{ flex: 1, gap: 3 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <T v="h2" style={{ flexShrink: 1 }} numberOfLines={1}>{day.name}</T>
-                    {isNext ? <Tag label="SIRADAKİ" color={C.onAccent} bg={C.accent} /> : null}
                   </View>
                   <T v="small" numberOfLines={1}>
                     {day.items.length} egzersiz{muscles ? ` · ${muscles}` : ''}
@@ -135,7 +205,7 @@ export function WorkoutTab() {
                   <T v="tiny">{lastDate ? `Son: ${relDay(lastDate)}` : 'Henüz yapılmadı'}</T>
                 </View>
                 <IconBtn name="edit" label="Günü düzenle" onPress={() => nav.push({ name: 'dayEdit', dayId: day.id })} />
-                <Btn label="Başlat" small kind={isNext ? 'primary' : 'secondary'} onPress={() => start(day)} disabled={day.items.length === 0} />
+                <Btn label="Başlat" small kind="secondary" onPress={() => start(day)} disabled={day.items.length === 0} />
               </View>
             </Card>
           );

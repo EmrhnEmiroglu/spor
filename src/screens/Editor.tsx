@@ -79,7 +79,7 @@ export function EditorScreen({ workoutId }: { workoutId: string | null }) {
     update((d) => {
       finishActive(d);
     });
-    nav.replace({ name: 'workoutDetail', id });
+    nav.replace({ name: 'workoutDetail', id, fresh: true });
   };
 
   const closeSaved = () => {

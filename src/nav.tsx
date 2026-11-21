@@ -9,7 +9,7 @@ export type Route =
   | { name: 'picker'; target: PickerTarget }
   | { name: 'newExercise' }
   | { name: 'dayEdit'; dayId: string }
-  | { name: 'workoutDetail'; id: string }
+  | { name: 'workoutDetail'; id: string; fresh?: boolean }
   | { name: 'exerciseProgress'; exerciseId: string }
   | { name: 'settings' }
   | { name: 'swap'; workoutId: string | null; entryIndex: number }

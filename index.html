@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, shrink-to-fit=no" />
+    <title>Spor</title>
+
+    <!-- iPhone ana ekranına eklenince tam ekran uygulama gibi açılması için -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Spor" />
+    <meta name="theme-color" content="#0d0d0d" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+    <link rel="icon" type="image/png" href="icon-192.png" />
+
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        overflow: hidden;
+        margin: 0;
+        background: #0d0d0d;
+        overscroll-behavior: none;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-text-size-adjust: 100%;
+        touch-action: manipulation;
+        font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+      input,
+      textarea {
+        -webkit-appearance: none;
+        appearance: none;
+      }
+    </style>
+  <link rel="icon" href="/spor/favicon.ico"/></head>
+
+  <body>
+    <noscript>Bu uygulamanın çalışması için JavaScript gerekli.</noscript>
+    <div id="root"></div>
+    <script>
+      // Çevrimdışı çalışma: yalnızca yayınlanmış (https) sürümde etkinleşir.
+      if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.search.indexOf('sw=1') !== -1)) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker
+            .register('sw.js')
+            .then(function () {
+              return navigator.serviceWorker.ready;
+            })
+            .then(function () {
+              // İlk açılışta indirilen dosyaları önbelleğe al ki bir sonraki açılış internetsiz çalışsın.
+              var urls = [location.href.split('#')[0]];
+              document.querySelectorAll('script[src], link[rel="manifest"], link[rel="apple-touch-icon"], link[rel="icon"]').forEach(function (el) {
+                urls.push(el.src || el.href);
+              });
+              return caches.open('spor-v1').then(function (cache) {
+                return Promise.all(
+                  urls.map(function (u) {
+                    return cache.add(u).catch(function () {});
+                  })
+                ).then(function () {
+                  // Eski sürümlerin kod dosyalarını temizle.
+                  return cache.keys().then(function (keys) {
+                    keys.forEach(function (req) {
+                      if (req.url.indexOf('/_expo/static/') !== -1 && urls.indexOf(req.url) === -1) cache.delete(req);
+                    });
+                  });
+                });
+              });
+            })
+            .catch(function () {});
+        });
+      }
+    </script>
+  <script src="/spor/_expo/static/js/web/index-44994ecea0680515b24131bd608efa0f.js" defer></script>
+</body>
+</html>

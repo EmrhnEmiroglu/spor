@@ -246,19 +246,6 @@ export function BodyMap({
 
   return (
     <View style={{ alignItems: 'center', gap: 12 }}>
-      <View
-        ref={boxRef}
-        {...(Platform.OS === 'web' ? {} : pan.panHandlers)}
-        onLayout={(e) => (width.current = Math.max(1, e.nativeEvent.layout.width))}
-        style={[
-          { width: '100%', maxWidth: 270, aspectRatio: ASPECT },
-          Platform.OS === 'web' ? ({ touchAction: 'pan-y', cursor: 'grab', userSelect: 'none' } as any) : null,
-        ]}
-      >
-        <View style={{ flex: 1, transform: [{ scaleX: squeeze }], opacity: 0.55 + 0.45 * squeeze }}>
-          <Figure side={side} values={values} selected={selected} onSelect={onSelect} />
-        </View>
-      </View>
       <View style={{ flexDirection: 'row', backgroundColor: C.surface2, borderRadius: 19, padding: 3 }}>
         {(
           [
@@ -290,6 +277,19 @@ export function BodyMap({
             </Pressable>
           );
         })}
+      </View>
+      <View
+        ref={boxRef}
+        {...(Platform.OS === 'web' ? {} : pan.panHandlers)}
+        onLayout={(e) => (width.current = Math.max(1, e.nativeEvent.layout.width))}
+        style={[
+          { width: '100%', maxWidth: 270, aspectRatio: ASPECT },
+          Platform.OS === 'web' ? ({ touchAction: 'pan-y', cursor: 'grab', userSelect: 'none' } as any) : null,
+        ]}
+      >
+        <View style={{ flex: 1, transform: [{ scaleX: squeeze }], opacity: 0.55 + 0.45 * squeeze }}>
+          <Figure side={side} values={values} selected={selected} onSelect={onSelect} />
+        </View>
       </View>
     </View>
   );

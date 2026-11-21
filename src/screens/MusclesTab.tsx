@@ -4,7 +4,7 @@ import { useDB, useExercises } from '../store';
 import { useNav } from '../nav';
 import { Btn, Card, Icon, IconBtn, IconName, Screen, SectionTitle, Segmented, T } from '../ui';
 import { C, HEAT_NONE, HEAT_STEPS, heatColor } from '../theme';
-import { Body3D } from '../body3d';
+import { BodyMap } from '../bodymap';
 import { BarChart, RangePicker, useRangeWeeks } from '../charts';
 import { MUSCLES, MUSCLE_NAME } from '../data/muscles';
 import { MuscleId } from '../types';
@@ -122,7 +122,28 @@ export function MusclesTab() {
       )}
 
       <Card style={{ gap: 14 }}>
-        <Body3D values={values} selected={sel} onSelect={(m) => setSel(sel === m ? null : m)} />
+        {/* Dokunulan kasın adı ve özeti: vücudun hemen üstünde, sabit yükseklikte. */}
+        <View style={{ minHeight: 46, justifyContent: 'center' }}>
+          {sel && selTarget ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <View style={{ width: 14, height: 14, borderRadius: 4, backgroundColor: heatColor(load[sel].weekly) }} />
+              <View style={{ flex: 1 }}>
+                <T v="h2">{MUSCLE_NAME[sel]}</T>
+                <T v="tiny" numberOfLines={1}>
+                  Hedef {selTarget.min}–{selTarget.max} · {STATUS[targetStatus(load[sel].weekly, selTarget)].label}
+                  {load[sel].last ? ` · son ${relDay(load[sel].last as string).toLocaleLowerCase('tr')}` : ' · henüz çalışılmadı'}
+                </T>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <T v="h2">{fmtNum(load[sel].weekly, 1)}</T>
+                <T v="tiny">{unit}</T>
+              </View>
+            </View>
+          ) : (
+            <T v="small" style={{ textAlign: 'center' }}>Adını ve ayrıntısını görmek için bir kasa dokun. Çevirmek için sürükle.</T>
+          )}
+        </View>
+        <BodyMap values={values} selected={sel} onSelect={(m) => setSel(sel === m ? null : m)} />
         <View style={{ gap: 6 }}>
           <T v="tiny">{period.weeks === 1 ? 'Haftalık set sayısı' : 'Haftalık ortalama set sayısı'}</T>
           <View style={{ flexDirection: 'row', gap: 2 }}>

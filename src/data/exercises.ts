@@ -1,7 +1,18 @@
 import { Equipment, Exercise, MuscleId } from '../types';
 
-function ex(id: string, name: string, equipment: Equipment, primary: MuscleId[], secondary: MuscleId[] = []): Exercise {
-  return { id, name, equipment, primary, secondary };
+/**
+ * aliases: aramada eşleşmesi istenen diğer adlar (ör. "single arm row", "tek kol").
+ * Kimlikler (id) geçmiş kayıtlarda saklanır; var olan bir kimliği değiştirme.
+ */
+function ex(
+  id: string,
+  name: string,
+  equipment: Equipment,
+  primary: MuscleId[],
+  secondary: MuscleId[] = [],
+  aliases: string[] = [],
+): Exercise {
+  return aliases.length ? { id, name, equipment, primary, secondary, aliases } : { id, name, equipment, primary, secondary };
 }
 
 export const LIBRARY: Exercise[] = [
@@ -15,19 +26,19 @@ export const LIBRARY: Exercise[] = [
   ex('cable-crossover', 'Cable Crossover', 'cable', ['chest'], ['shoulders']),
   ex('pec-deck', 'Pec Deck (Butterfly)', 'machine', ['chest']),
   ex('chest-press-machine', 'Chest Press Makinesi', 'machine', ['chest'], ['shoulders', 'triceps']),
-  ex('push-up', 'Şınav', 'bodyweight', ['chest'], ['shoulders', 'triceps', 'abs']),
+  ex('push-up', 'Şınav', 'bodyweight', ['chest'], ['shoulders', 'triceps', 'abs'], ['push up', 'push-up']),
   ex('dips', 'Dips', 'bodyweight', ['chest', 'triceps'], ['shoulders']),
 
   // Sırt
   ex('deadlift', 'Deadlift', 'barbell', ['lowerBack', 'hamstrings', 'glutes'], ['traps', 'upperBack', 'forearms', 'quads']),
-  ex('pull-up', 'Barfiks', 'bodyweight', ['lats'], ['biceps', 'upperBack', 'forearms']),
+  ex('pull-up', 'Barfiks', 'bodyweight', ['lats'], ['biceps', 'upperBack', 'forearms'], ['pull up', 'pull-up']),
   ex('chin-up', 'Chin-up', 'bodyweight', ['lats', 'biceps'], ['upperBack', 'forearms']),
   ex('lat-pulldown', 'Lat Pulldown', 'cable', ['lats'], ['biceps', 'upperBack']),
   ex('barbell-row', 'Barbell Row', 'barbell', ['upperBack', 'lats'], ['biceps', 'lowerBack', 'forearms']),
-  ex('db-row', 'Dumbbell Row', 'dumbbell', ['lats', 'upperBack'], ['biceps', 'forearms']),
+  ex('db-row', 'Single Arm Dumbbell Row', 'dumbbell', ['lats', 'upperBack'], ['biceps', 'forearms'], ['dumbbell row', 'one arm row', 'tek kol row']),
   ex('seated-row', 'Seated Cable Row', 'cable', ['upperBack', 'lats'], ['biceps']),
   ex('t-bar-row', 'T-Bar Row', 'barbell', ['upperBack', 'lats'], ['biceps', 'lowerBack']),
-  ex('straight-arm-pulldown', 'Straight Arm Pulldown', 'cable', ['lats'], ['triceps']),
+  ex('straight-arm-pulldown', 'Straight Arm Pulldown', 'cable', ['lats'], ['triceps'], ['cable pullover', 'lat prayer']),
   ex('face-pull', 'Face Pull', 'cable', ['shoulders', 'upperBack'], ['traps']),
   ex('shrug', 'Shrug', 'dumbbell', ['traps'], ['forearms']),
   ex('hyperextension', 'Hyperextension', 'bodyweight', ['lowerBack'], ['glutes', 'hamstrings']),
@@ -68,16 +79,16 @@ export const LIBRARY: Exercise[] = [
   ex('farmers-walk', "Farmer's Walk", 'dumbbell', ['forearms', 'traps'], ['abs']),
 
   // Bacak
-  ex('squat', 'Squat', 'barbell', ['quads', 'glutes'], ['hamstrings', 'lowerBack', 'abs']),
+  ex('squat', 'Squat', 'barbell', ['quads', 'glutes'], ['hamstrings', 'adductors', 'lowerBack', 'abs'], ['back squat', 'barbell squat']),
   ex('front-squat', 'Front Squat', 'barbell', ['quads'], ['glutes', 'abs']),
   ex('leg-press', 'Leg Press', 'machine', ['quads'], ['glutes', 'hamstrings']),
   ex('hack-squat', 'Hack Squat', 'machine', ['quads'], ['glutes']),
   ex('leg-extension', 'Leg Extension', 'machine', ['quads']),
-  ex('lunge', 'Lunge', 'dumbbell', ['quads', 'glutes'], ['hamstrings']),
-  ex('bulgarian-split-squat', 'Bulgarian Split Squat', 'dumbbell', ['quads', 'glutes'], ['hamstrings']),
+  ex('lunge', 'Lunge', 'dumbbell', ['quads', 'glutes'], ['hamstrings', 'adductors']),
+  ex('bulgarian-split-squat', 'Bulgarian Split Squat', 'dumbbell', ['quads', 'glutes'], ['hamstrings', 'adductors']),
   ex('goblet-squat', 'Goblet Squat', 'dumbbell', ['quads'], ['glutes', 'abs']),
   ex('rdl', 'Romanian Deadlift', 'barbell', ['hamstrings', 'glutes'], ['lowerBack', 'forearms']),
-  ex('sumo-deadlift', 'Sumo Deadlift', 'barbell', ['glutes', 'quads', 'hamstrings'], ['lowerBack', 'traps', 'forearms']),
+  ex('sumo-deadlift', 'Sumo Deadlift', 'barbell', ['glutes', 'quads', 'hamstrings'], ['adductors', 'lowerBack', 'traps', 'forearms']),
   ex('good-morning', 'Good Morning', 'barbell', ['hamstrings', 'lowerBack'], ['glutes']),
   ex('leg-curl', 'Leg Curl (Yatarak)', 'machine', ['hamstrings'], ['calves']),
   ex('seated-leg-curl', 'Seated Leg Curl', 'machine', ['hamstrings']),
@@ -95,6 +106,109 @@ export const LIBRARY: Exercise[] = [
   ex('plank', 'Plank (saniye)', 'bodyweight', ['abs'], ['lowerBack']),
   ex('russian-twist', 'Russian Twist', 'bodyweight', ['abs']),
   ex('ab-wheel', 'Ab Wheel', 'other', ['abs'], ['lats', 'shoulders']),
+  // ---------- Genişletilmiş kütüphane ----------
+
+  // Sırt
+  ex('db-pullover', 'Dumbbell Pullover', 'dumbbell', ['lats', 'chest'], ['triceps'], ['pullover']),
+  ex('barbell-pullover', 'Barbell Pullover', 'barbell', ['lats', 'chest'], ['triceps'], ['pullover']),
+  ex('machine-pullover', 'Pullover Makinesi', 'machine', ['lats'], ['chest', 'triceps'], ['pullover machine']),
+  ex('cable-pullover', 'Cable Pullover (Halat)', 'cable', ['lats'], ['triceps'], ['rope pullover']),
+  ex('single-arm-cable-row', 'Single Arm Cable Row', 'cable', ['lats', 'upperBack'], ['biceps'], ['one arm cable row', 'tek kol kablo row']),
+  ex('single-arm-lat-pulldown', 'Single Arm Lat Pulldown', 'cable', ['lats'], ['biceps', 'upperBack'], ['one arm pulldown', 'tek kol pulldown']),
+  ex('single-arm-machine-row', 'Single Arm Machine Row', 'machine', ['lats', 'upperBack'], ['biceps'], ['iso lateral row', 'hammer row', 'tek kol makine row']),
+  ex('machine-row', 'Seated Row Makinesi', 'machine', ['upperBack', 'lats'], ['biceps'], ['machine row']),
+  ex('high-row-machine', 'High Row Makinesi', 'machine', ['lats', 'upperBack'], ['biceps'], ['iso lateral high row']),
+  ex('low-row-machine', 'Low Row Makinesi', 'machine', ['lats', 'upperBack'], ['biceps']),
+  ex('chest-supported-row', 'Chest Supported Row', 'machine', ['upperBack', 'lats'], ['biceps'], ['göğüs destekli row']),
+  ex('incline-db-row', 'Incline Dumbbell Row', 'dumbbell', ['upperBack', 'lats'], ['biceps'], ['chest supported dumbbell row']),
+  ex('pendlay-row', 'Pendlay Row', 'barbell', ['upperBack', 'lats'], ['biceps', 'lowerBack']),
+  ex('meadows-row', 'Meadows Row', 'barbell', ['lats', 'upperBack'], ['biceps', 'forearms'], ['landmine row']),
+  ex('seal-row', 'Seal Row', 'barbell', ['upperBack', 'lats'], ['biceps']),
+  ex('inverted-row', 'Inverted Row', 'bodyweight', ['upperBack', 'lats'], ['biceps'], ['australian pull up']),
+  ex('wide-grip-seated-row', 'Wide Grip Seated Row', 'cable', ['upperBack'], ['lats', 'biceps', 'shoulders']),
+  ex('wide-grip-pulldown', 'Wide Grip Lat Pulldown', 'cable', ['lats'], ['biceps', 'upperBack'], ['geniş tutuş pulldown']),
+  ex('close-grip-pulldown', 'Close Grip Lat Pulldown', 'cable', ['lats'], ['biceps', 'upperBack'], ['v bar pulldown', 'dar tutuş pulldown']),
+  ex('reverse-grip-pulldown', 'Reverse Grip Lat Pulldown', 'cable', ['lats', 'biceps'], ['upperBack'], ['underhand pulldown', 'ters tutuş pulldown']),
+  ex('neutral-grip-pull-up', 'Neutral Grip Pull-up', 'bodyweight', ['lats'], ['biceps', 'upperBack', 'forearms'], ['barfiks nötr']),
+  ex('assisted-pull-up', 'Assisted Pull-up Makinesi', 'machine', ['lats'], ['biceps', 'upperBack'], ['destekli barfiks']),
+  ex('rack-pull', 'Rack Pull', 'barbell', ['lowerBack', 'traps'], ['glutes', 'hamstrings', 'forearms']),
+  ex('barbell-shrug', 'Barbell Shrug', 'barbell', ['traps'], ['forearms']),
+  ex('back-extension-machine', 'Back Extension Makinesi', 'machine', ['lowerBack'], ['glutes']),
+  ex('superman', 'Superman', 'bodyweight', ['lowerBack'], ['glutes']),
+
+  // Göğüs
+  ex('incline-db-fly', 'Incline Dumbbell Fly', 'dumbbell', ['chest'], ['shoulders']),
+  ex('cable-fly-low-high', 'Cable Fly (Aşağıdan Yukarı)', 'cable', ['chest'], ['shoulders'], ['low to high cable fly', 'üst göğüs fly']),
+  ex('cable-fly-high-low', 'Cable Fly (Yukarıdan Aşağı)', 'cable', ['chest'], ['shoulders'], ['high to low cable fly', 'alt göğüs fly']),
+  ex('incline-chest-press-machine', 'Incline Chest Press Makinesi', 'machine', ['chest'], ['shoulders', 'triceps']),
+  ex('decline-db-press', 'Decline Dumbbell Press', 'dumbbell', ['chest'], ['triceps', 'shoulders']),
+  ex('smith-bench', 'Smith Machine Bench Press', 'machine', ['chest'], ['shoulders', 'triceps']),
+  ex('smith-incline-bench', 'Smith Machine Incline Press', 'machine', ['chest'], ['shoulders', 'triceps']),
+  ex('landmine-press', 'Landmine Press', 'barbell', ['shoulders', 'chest'], ['triceps']),
+  ex('diamond-push-up', 'Diamond Şınav', 'bodyweight', ['triceps', 'chest'], ['shoulders'], ['diamond push up']),
+
+  // Omuz
+  ex('machine-lateral-raise', 'Lateral Raise Makinesi', 'machine', ['shoulders'], ['traps']),
+  ex('cable-front-raise', 'Cable Front Raise', 'cable', ['shoulders']),
+  ex('plate-front-raise', 'Plate Front Raise', 'other', ['shoulders'], [], ['plaka front raise']),
+  ex('cable-rear-delt-fly', 'Cable Rear Delt Fly', 'cable', ['shoulders'], ['upperBack'], ['arka omuz kablo']),
+  ex('smith-shoulder-press', 'Smith Machine Shoulder Press', 'machine', ['shoulders'], ['triceps']),
+  ex('push-press', 'Push Press', 'barbell', ['shoulders'], ['triceps', 'quads']),
+  ex('y-raise', 'Y Raise', 'dumbbell', ['shoulders'], ['traps', 'upperBack']),
+
+  // Biceps
+  ex('ez-bar-curl', 'EZ Bar Curl', 'barbell', ['biceps'], ['forearms'], ['z bar curl']),
+  ex('spider-curl', 'Spider Curl', 'dumbbell', ['biceps']),
+  ex('bayesian-curl', 'Bayesian Cable Curl', 'cable', ['biceps'], [], ['behind body cable curl']),
+  ex('machine-curl', 'Biceps Curl Makinesi', 'machine', ['biceps'], ['forearms'], ['machine preacher curl']),
+  ex('rope-hammer-curl', 'Rope Hammer Curl', 'cable', ['biceps', 'forearms'], [], ['cable hammer curl']),
+  ex('db-preacher-curl', 'Dumbbell Preacher Curl', 'dumbbell', ['biceps'], ['forearms']),
+  ex('drag-curl', 'Drag Curl', 'barbell', ['biceps']),
+  ex('zottman-curl', 'Zottman Curl', 'dumbbell', ['biceps', 'forearms']),
+
+  // Triceps
+  ex('overhead-cable-ext', 'Overhead Cable Triceps Extension', 'cable', ['triceps'], [], ['rope overhead extension']),
+  ex('single-arm-pushdown', 'Single Arm Pushdown', 'cable', ['triceps'], [], ['tek kol pushdown']),
+  ex('triceps-dip-machine', 'Triceps Dip Makinesi', 'machine', ['triceps'], ['chest', 'shoulders'], ['seated dip']),
+  ex('triceps-ext-machine', 'Triceps Extension Makinesi', 'machine', ['triceps']),
+  ex('db-skull-crusher', 'Dumbbell Skull Crusher', 'dumbbell', ['triceps']),
+  ex('french-press', 'French Press', 'barbell', ['triceps'], [], ['ez overhead extension']),
+  ex('jm-press', 'JM Press', 'barbell', ['triceps'], ['chest']),
+
+  // Ön kol
+  ex('reverse-wrist-curl', 'Reverse Wrist Curl', 'dumbbell', ['forearms']),
+  ex('dead-hang', 'Dead Hang (saniye)', 'bodyweight', ['forearms'], ['lats'], ['asılma']),
+
+  // Bacak
+  ex('smith-squat', 'Smith Machine Squat', 'machine', ['quads', 'glutes'], ['hamstrings', 'adductors']),
+  ex('single-leg-press', 'Single Leg Press', 'machine', ['quads'], ['glutes', 'hamstrings'], ['tek bacak leg press']),
+  ex('walking-lunge', 'Walking Lunge', 'dumbbell', ['quads', 'glutes'], ['hamstrings', 'adductors']),
+  ex('reverse-lunge', 'Reverse Lunge', 'dumbbell', ['quads', 'glutes'], ['hamstrings']),
+  ex('split-squat', 'Split Squat', 'dumbbell', ['quads', 'glutes'], ['hamstrings']),
+  ex('step-up', 'Step Up', 'dumbbell', ['quads', 'glutes'], ['hamstrings']),
+  ex('trap-bar-deadlift', 'Trap Bar Deadlift', 'barbell', ['quads', 'glutes', 'hamstrings'], ['lowerBack', 'traps', 'forearms'], ['hex bar deadlift']),
+  ex('db-rdl', 'Dumbbell Romanian Deadlift', 'dumbbell', ['hamstrings', 'glutes'], ['lowerBack', 'forearms'], ['dumbbell rdl']),
+  ex('stiff-leg-deadlift', 'Stiff Leg Deadlift', 'barbell', ['hamstrings', 'glutes'], ['lowerBack']),
+  ex('single-leg-rdl', 'Single Leg RDL', 'dumbbell', ['hamstrings', 'glutes'], ['lowerBack'], ['tek bacak rdl']),
+  ex('nordic-curl', 'Nordic Curl', 'bodyweight', ['hamstrings']),
+  ex('glute-bridge', 'Glute Bridge', 'bodyweight', ['glutes'], ['hamstrings']),
+  ex('cable-pull-through', 'Cable Pull Through', 'cable', ['glutes', 'hamstrings'], ['lowerBack']),
+  ex('kettlebell-swing', 'Kettlebell Swing', 'other', ['glutes', 'hamstrings'], ['lowerBack', 'shoulders']),
+  ex('hip-adduction', 'Hip Adduction Makinesi', 'machine', ['adductors'], [], ['iç bacak makinesi', 'adductor']),
+  ex('copenhagen-plank', 'Copenhagen Plank (saniye)', 'bodyweight', ['adductors'], ['abs']),
+  ex('leg-press-calf-raise', 'Leg Press Calf Raise', 'machine', ['calves']),
+  ex('single-leg-calf-raise', 'Single Leg Calf Raise', 'bodyweight', ['calves'], [], ['tek bacak calf raise']),
+
+  // Karın
+  ex('hanging-knee-raise', 'Hanging Knee Raise', 'bodyweight', ['abs'], ['forearms']),
+  ex('toes-to-bar', 'Toes to Bar', 'bodyweight', ['abs'], ['forearms', 'lats']),
+  ex('decline-crunch', 'Decline Crunch', 'bodyweight', ['abs']),
+  ex('ab-crunch-machine', 'Karın Makinesi (Crunch)', 'machine', ['abs'], [], ['ab crunch machine']),
+  ex('bicycle-crunch', 'Bicycle Crunch', 'bodyweight', ['abs']),
+  ex('v-up', 'V-Up', 'bodyweight', ['abs']),
+  ex('side-plank', 'Side Plank (saniye)', 'bodyweight', ['abs']),
+  ex('cable-woodchopper', 'Cable Woodchopper', 'cable', ['abs'], ['shoulders']),
+  ex('pallof-press', 'Pallof Press', 'cable', ['abs']),
 ];
 
 type TItem = [exerciseId: string, sets: number, repMin: number, repMax: number];

@@ -6,7 +6,7 @@ import { Btn, Chip, Field, Icon, IconBtn, Screen, T, Tag, useDialog } from '../u
 import { C } from '../theme';
 import { EQUIPMENT, EQUIPMENT_NAME, MUSCLES, MUSCLE_NAME } from '../data/muscles';
 import { Equipment, MuscleId } from '../types';
-import { buildSessions, uid } from '../logic';
+import { buildSessions, matchesExercise, uid } from '../logic';
 import { makeEntry } from '../actions';
 
 export function PickerScreen({ target }: { target: PickerTarget }) {
@@ -20,13 +20,16 @@ export function PickerScreen({ target }: { target: PickerTarget }) {
   const index = useMemo(() => buildSessions(db.workouts), [db.workouts]);
 
   const shown = useMemo(() => {
-    const needle = q.trim().toLocaleLowerCase('tr');
-    return list.filter(
-      (e) =>
-        (!needle || e.name.toLocaleLowerCase('tr').includes(needle)) &&
-        (!muscle || e.primary.includes(muscle) || e.secondary.includes(muscle)),
+    const hits = list.filter(
+      (e) => matchesExercise(e, q) && (!muscle || e.primary.includes(muscle) || e.secondary.includes(muscle)),
     );
-  }, [list, q, muscle]);
+    // Daha önce yaptığın hareketler, en son yapılandan başlayarak üstte durur.
+    const lastUsed = (id: string) => {
+      const h = index.get(id);
+      return h?.length ? h[h.length - 1].date : '';
+    };
+    return hits.sort((a, b) => (lastUsed(a.id) === lastUsed(b.id) ? 0 : lastUsed(a.id) < lastUsed(b.id) ? 1 : -1));
+  }, [list, q, muscle, index]);
 
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
@@ -75,7 +78,7 @@ export function PickerScreen({ target }: { target: PickerTarget }) {
       }
     >
       <View style={{ paddingHorizontal: 16, gap: 10, paddingBottom: 10 }}>
-        <Field value={q} onChangeText={setQ} placeholder="Egzersiz ara" />
+        <Field value={q} onChangeText={setQ} placeholder="Ara: pullover, tek kol, kablo..." />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -93,6 +96,9 @@ export function PickerScreen({ target }: { target: PickerTarget }) {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 24 }}
         keyboardShouldPersistTaps="handled"
       >
+        <T v="tiny" style={{ paddingVertical: 6 }}>
+          {shown.length} hareket{q || muscle ? '' : '. Daha önce yaptıkların üstte.'}
+        </T>
         {shown.map((e) => {
           const on = picked.includes(e.id);
           return (

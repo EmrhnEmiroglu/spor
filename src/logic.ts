@@ -1,5 +1,5 @@
 import { DB, Exercise, MuscleId, MuscleTarget, ProgramDay, SetEntry, Settings, Workout, WorkoutEntry } from './types';
-import { MUSCLES } from './data/muscles';
+import { EQUIPMENT_NAME, MUSCLES, MUSCLE_NAME } from './data/muscles';
 
 export const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
@@ -313,6 +313,7 @@ export const DEFAULT_TARGETS: Record<MuscleId, MuscleTarget> = {
   lats: { min: 10, max: 20 },
   upperBack: { min: 10, max: 20 },
   quads: { min: 10, max: 20 },
+  adductors: { min: 4, max: 12 },
   hamstrings: { min: 8, max: 16 },
   glutes: { min: 8, max: 16 },
   biceps: { min: 8, max: 16 },
@@ -551,7 +552,7 @@ const sumOf = (sets: Record<MuscleId, number>, ids: MuscleId[]) => ids.reduce((a
 export function balances(sets: Record<MuscleId, number>): Balance[] {
   const push: MuscleId[] = ['chest', 'shoulders', 'triceps'];
   const pull: MuscleId[] = ['lats', 'upperBack', 'biceps', 'traps', 'forearms'];
-  const legs: MuscleId[] = ['quads', 'hamstrings', 'glutes', 'calves'];
+  const legs: MuscleId[] = ['quads', 'hamstrings', 'glutes', 'adductors', 'calves'];
   const front: MuscleId[] = ['chest', 'abs', 'quads', 'biceps'];
   const back: MuscleId[] = ['lats', 'upperBack', 'traps', 'lowerBack', 'glutes', 'hamstrings', 'triceps', 'calves'];
   return [
@@ -611,4 +612,33 @@ export function recordRows(index: Map<string, Session[]>, from: string): RecordR
     rows.push({ exerciseId, metric, best, bestDate, prs });
   }
   return rows.sort((a, b) => (a.bestDate < b.bestDate ? 1 : a.bestDate > b.bestDate ? -1 : 0));
+}
+
+// ---------- Egzersiz arama ----------
+
+/** Küçük harfe çevirir, Türkçe harfleri sadeleştirir, noktalama ve tireleri boşluk yapar. */
+export function normalizeText(t: string): string {
+  return t
+    .toLocaleLowerCase('tr')
+    .replace(/ı/g, 'i')
+    .replace(/ş/g, 's')
+    .replace(/ğ/g, 'g')
+    .replace(/ü/g, 'u')
+    .replace(/ö/g, 'o')
+    .replace(/ç/g, 'c')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
+ * Arama: yazılan her kelime egzersizin adında, diğer adlarında, kaslarında ya da
+ * ekipmanında geçmelidir. Kelime sırası ve Türkçe karakter fark etmez.
+ */
+export function matchesExercise(e: Exercise, query: string): boolean {
+  const words = normalizeText(query).split(' ').filter(Boolean);
+  if (!words.length) return true;
+  const hay = normalizeText(
+    [e.name, ...(e.aliases ?? []), ...e.primary.map((m) => MUSCLE_NAME[m]), EQUIPMENT_NAME[e.equipment]].join(' '),
+  );
+  return words.every((w) => hay.includes(w));
 }

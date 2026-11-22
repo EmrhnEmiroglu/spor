@@ -11,6 +11,7 @@ export type MuscleId =
   | 'lowerBack'
   | 'glutes'
   | 'quads'
+  | 'adductors'
   | 'hamstrings'
   | 'calves';
 
@@ -23,6 +24,8 @@ export interface Exercise {
   secondary: MuscleId[];
   equipment: Equipment;
   custom?: boolean;
+  /** Aramada eşleşen diğer adlar. */
+  aliases?: string[];
 }
 
 export interface PlanItem {

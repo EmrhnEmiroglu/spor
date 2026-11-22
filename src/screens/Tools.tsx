@@ -5,7 +5,7 @@ import { useNav } from '../nav';
 import { Card, Chip, Empty, Field, Icon, NumInput, Screen, T, Tag } from '../ui';
 import { C } from '../theme';
 import { EQUIPMENT_NAME, MUSCLE_NAME } from '../data/muscles';
-import { fmtNum, platesPerSide } from '../logic';
+import { fmtNum, matchesExercise, platesPerSide } from '../logic';
 import { makeEntry } from '../actions';
 
 /** Antrenmandaki bir egzersizi, aynı kası çalıştıran başka biriyle değiştirir. */
@@ -19,9 +19,8 @@ export function SwapScreen({ workoutId, entryIndex }: { workoutId: string | null
   const cur = entry ? map.get(entry.exerciseId) : undefined;
 
   const options = useMemo(() => {
-    const needle = q.trim().toLocaleLowerCase('tr');
     const others = list.filter((e) => e.id !== cur?.id);
-    if (needle) return others.filter((e) => e.name.toLocaleLowerCase('tr').includes(needle));
+    if (q.trim()) return others.filter((e) => matchesExercise(e, q));
     if (!cur) return others;
     return others
       .map((e) => ({

@@ -13,6 +13,7 @@ export const MUSCLES: { id: MuscleId; name: string }[] = [
   { id: 'lowerBack', name: 'Bel' },
   { id: 'glutes', name: 'Kalça' },
   { id: 'quads', name: 'Ön bacak' },
+  { id: 'adductors', name: 'İç bacak' },
   { id: 'hamstrings', name: 'Arka bacak' },
   { id: 'calves', name: 'Baldır' },
 ];

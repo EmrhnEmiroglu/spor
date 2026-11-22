@@ -32,6 +32,7 @@ const SLUG_TO_MUSCLE: Record<string, MuscleId> = {
   'lower-back': 'lowerBack',
   gluteal: 'glutes',
   quadriceps: 'quads',
+  adductors: 'adductors',
   hamstring: 'hamstrings',
   calves: 'calves',
 };

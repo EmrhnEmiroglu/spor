@@ -69,7 +69,7 @@ export function SwapScreen({ workoutId, entryIndex }: { workoutId: string | null
         <Field value={q} onChangeText={setQ} placeholder="Tüm egzersizlerde ara" />
       </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
-        {options.map((e) => (
+        {options.slice(0, 80).map((e) => (
           <Pressable
             key={e.id}
             onPress={() => pick(e.id)}

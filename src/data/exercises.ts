@@ -1,4 +1,5 @@
 import { Equipment, Exercise, MuscleId } from '../types';
+import { EXTRA, EXTRA_ALIASES } from './exercisesExtra';
 
 /**
  * aliases: aramada eşleşmesi istenen diğer adlar (ör. "single arm row", "tek kol").
@@ -15,7 +16,8 @@ function ex(
   return aliases.length ? { id, name, equipment, primary, secondary, aliases } : { id, name, equipment, primary, secondary };
 }
 
-export const LIBRARY: Exercise[] = [
+/** Elle yazılmış, özenle seçilmiş hareketler. Program şablonları bunları kullanır. */
+const BASE: Exercise[] = [
   // Göğüs
   ex('bench-press', 'Bench Press', 'barbell', ['chest'], ['shoulders', 'triceps']),
   ex('incline-bench', 'Incline Bench Press', 'barbell', ['chest'], ['shoulders', 'triceps']),
@@ -210,6 +212,19 @@ export const LIBRARY: Exercise[] = [
   ex('cable-woodchopper', 'Cable Woodchopper', 'cable', ['abs'], ['shoulders']),
   ex('pallof-press', 'Pallof Press', 'cable', ['abs']),
 ];
+
+/**
+ * Tüm kütüphane: elle yazılmış hareketler ve açık veri setinden gelenler (kimliği "fx-" ile
+ * başlar). Veri setindeki eş adlar, elle yazılmış hareketlere arama için eklenir.
+ */
+export const LIBRARY: Exercise[] = [
+  ...BASE.map((e) => (EXTRA_ALIASES[e.id] ? { ...e, aliases: [...(e.aliases ?? []), ...EXTRA_ALIASES[e.id]] } : e)),
+  ...EXTRA,
+];
+
+/** Elle yazılmış kütüphaneden mi? Seçicide bunlar veri setinden gelenlerin önünde durur. */
+export const isCurated = (e: Exercise) => !e.id.startsWith('fx-');
+
 
 type TItem = [exerciseId: string, sets: number, repMin: number, repMax: number];
 

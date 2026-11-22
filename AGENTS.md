@@ -30,6 +30,7 @@ Kişisel antrenman takip uygulaması. Arayüz dili Türkçe. Birincil hedef, iPh
 - Veriler yalnızca cihazda durur: `src/store.tsx`, AsyncStorage anahtarı `spor-db-v1`. Sunucu yok.
 - `app.json` içindeki `experiments.baseUrl` GitHub Pages alt yoluna (`/spor`) göre ayarlıdır.
 - `public/sw.js` ve `public/index.html` çevrimdışı önbelleği yönetir.
+- Egzersiz kütüphanesi iki kaynaktan oluşur: elle yazılmış temel hareketler (`src/data/exercises.ts`) ve açık veri setinden üretilen ek hareketler (`src/data/exercisesExtra.ts`, kimlikleri `fx-` ile başlar). Ek dosya elle düzenlenmez; `python scripts/import-exercises.py <exercises.json>` ile yeniden üretilir. Kaynak `yuhonas/free-exercise-db` (Unlicense). Egzersiz kimlikleri geçmiş kayıtlarda saklanır, hiçbir kimliği değiştirme ya da silme.
 - Program iki düzende çalışır: hiçbir güne hafta günü atanmadıysa günler sırayla döner (`nextDayId`); atandıysa haftalık plan geçerlidir (`ProgramDay.weekdays`, `todayPlan`, `assignWeekday` — hepsi `src/actions.ts`).
 
 ## İstatistik kuralları

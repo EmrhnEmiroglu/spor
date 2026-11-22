@@ -8,6 +8,10 @@ import { EQUIPMENT, EQUIPMENT_NAME, MUSCLES, MUSCLE_NAME } from '../data/muscles
 import { Equipment, MuscleId } from '../types';
 import { buildSessions, matchesExercise, uid } from '../logic';
 import { makeEntry } from '../actions';
+import { isCurated } from '../data/exercises';
+
+/** Uzun liste telefonu yormasın diye hareketler bu kadarlık dilimlerle gösterilir. */
+const PAGE = 60;
 
 export function PickerScreen({ target }: { target: PickerTarget }) {
   const { db, update } = useDB();
@@ -16,20 +20,36 @@ export function PickerScreen({ target }: { target: PickerTarget }) {
   const { list } = useExercises();
   const [q, setQ] = useState('');
   const [muscle, setMuscle] = useState<MuscleId | null>(null);
+  const [equipment, setEquipment] = useState<Equipment | null>(null);
+  const [limit, setLimit] = useState(PAGE);
   const [picked, setPicked] = useState<string[]>([]);
   const index = useMemo(() => buildSessions(db.workouts), [db.workouts]);
 
   const shown = useMemo(() => {
     const hits = list.filter(
-      (e) => matchesExercise(e, q) && (!muscle || e.primary.includes(muscle) || e.secondary.includes(muscle)),
+      (e) =>
+        matchesExercise(e, q) &&
+        (!muscle || e.primary.includes(muscle) || e.secondary.includes(muscle)) &&
+        (!equipment || e.equipment === equipment),
     );
-    // Daha önce yaptığın hareketler, en son yapılandan başlayarak üstte durur.
+    // Sıra: daha önce yaptıkların (en yeniden eskiye), sonra temel hareketler, sonra diğerleri.
     const lastUsed = (id: string) => {
       const h = index.get(id);
       return h?.length ? h[h.length - 1].date : '';
     };
-    return hits.sort((a, b) => (lastUsed(a.id) === lastUsed(b.id) ? 0 : lastUsed(a.id) < lastUsed(b.id) ? 1 : -1));
-  }, [list, q, muscle, index]);
+    const rank = (e: (typeof hits)[number]) => (lastUsed(e.id) ? 0 : e.custom || isCurated(e) ? 1 : 2);
+    return hits.sort((a, b) => {
+      if (rank(a) !== rank(b)) return rank(a) - rank(b);
+      if (rank(a) === 0 && lastUsed(a.id) !== lastUsed(b.id)) return lastUsed(a.id) < lastUsed(b.id) ? 1 : -1;
+      return 0;
+    });
+  }, [list, q, muscle, equipment, index]);
+
+  // Filtre değişince liste baştan gösterilir.
+  const resetAnd = <T,>(set: (v: T) => void) => (v: T) => {
+    setLimit(PAGE);
+    set(v);
+  };
 
   const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
 
@@ -78,16 +98,37 @@ export function PickerScreen({ target }: { target: PickerTarget }) {
       }
     >
       <View style={{ paddingHorizontal: 16, gap: 10, paddingBottom: 10 }}>
-        <Field value={q} onChangeText={setQ} placeholder="Ara: pullover, tek kol, kablo..." />
+        <Field value={q} onChangeText={resetAnd(setQ)} placeholder="Ara: pullover, tek kol, kablo..." />
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ gap: 8 }}
           keyboardShouldPersistTaps="handled"
         >
-          <Chip label="Tümü" selected={!muscle} onPress={() => setMuscle(null)} />
+          <Chip label="Tüm kaslar" selected={!muscle} onPress={() => resetAnd(setMuscle)(null)} />
           {MUSCLES.map((m) => (
-            <Chip key={m.id} label={m.name} selected={muscle === m.id} onPress={() => setMuscle(muscle === m.id ? null : m.id)} />
+            <Chip
+              key={m.id}
+              label={m.name}
+              selected={muscle === m.id}
+              onPress={() => resetAnd(setMuscle)(muscle === m.id ? null : m.id)}
+            />
+          ))}
+        </ScrollView>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <Chip label="Tüm ekipman" selected={!equipment} onPress={() => resetAnd(setEquipment)(null)} />
+          {EQUIPMENT.map((x) => (
+            <Chip
+              key={x.id}
+              label={x.name}
+              selected={equipment === x.id}
+              onPress={() => resetAnd(setEquipment)(equipment === x.id ? null : x.id)}
+            />
           ))}
         </ScrollView>
       </View>
@@ -97,9 +138,9 @@ export function PickerScreen({ target }: { target: PickerTarget }) {
         keyboardShouldPersistTaps="handled"
       >
         <T v="tiny" style={{ paddingVertical: 6 }}>
-          {shown.length} hareket{q || muscle ? '' : '. Daha önce yaptıkların üstte.'}
+          {shown.length} hareket{q || muscle || equipment ? '' : '. Daha önce yaptıkların üstte.'}
         </T>
-        {shown.map((e) => {
+        {shown.slice(0, limit).map((e) => {
           const on = picked.includes(e.id);
           return (
             <Pressable
@@ -141,6 +182,15 @@ export function PickerScreen({ target }: { target: PickerTarget }) {
             </Pressable>
           );
         })}
+        {shown.length > limit ? (
+          <Btn
+            label={`${shown.length - limit} hareket daha göster`}
+            kind="secondary"
+            small
+            onPress={() => setLimit((n) => n + PAGE)}
+            style={{ marginTop: 12 }}
+          />
+        ) : null}
         {shown.length === 0 ? (
           <T v="small" style={{ textAlign: 'center', paddingVertical: 24 }}>Eşleşen egzersiz yok.</T>
         ) : null}

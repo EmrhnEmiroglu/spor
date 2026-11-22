@@ -6,7 +6,7 @@ import { Btn, Chip, Field, Icon, IconBtn, Screen, T, Tag, useDialog } from '../u
 import { C } from '../theme';
 import { EQUIPMENT, EQUIPMENT_NAME, MUSCLES, MUSCLE_NAME } from '../data/muscles';
 import { Equipment, MuscleId } from '../types';
-import { buildSessions, matchesExercise, uid } from '../logic';
+import { buildSessions, matchesExercise, secondaryText, uid } from '../logic';
 import { makeEntry } from '../actions';
 import { isCurated } from '../data/exercises';
 
@@ -150,7 +150,8 @@ export function PickerScreen({ target }: { target: PickerTarget }) {
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 12,
-                minHeight: 60,
+                minHeight: 66,
+                paddingVertical: 8,
                 borderBottomWidth: 1,
                 borderBottomColor: C.border,
               }}
@@ -177,6 +178,11 @@ export function PickerScreen({ target }: { target: PickerTarget }) {
                 <T v="tiny" numberOfLines={1} style={{ marginTop: 2 }}>
                   {e.primary.map((m) => MUSCLE_NAME[m]).join(', ')} · {EQUIPMENT_NAME[e.equipment]}
                 </T>
+                {e.secondary.length ? (
+                  <T v="tiny" numberOfLines={1} style={{ marginTop: 1, fontSize: 11 }}>
+                    Yardımcı: {secondaryText(e)}
+                  </T>
+                ) : null}
               </View>
               {e.custom ? <IconBtn name="trash" label="Egzersizi sil" onPress={() => removeCustom(e.id, e.name)} /> : null}
             </Pressable>

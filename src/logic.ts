@@ -255,14 +255,19 @@ export function fmtMinutes(m: number | null): string {
 // ---------- Kas yükü ve hedefler ----------
 
 export interface MuscleLoad {
+  /** Aralıktaki toplam: doğrudan setler tam, dolaylı setler yarım sayılmış hali. */
   sets: number;
   weekly: number;
+  /** Kasın ana kas olduğu hareketlerden gelen haftalık set. */
+  weeklyDirect: number;
+  /** Kasın yardımcı olduğu hareketlerden gelen haftalık set (yarım sayılmış). */
+  weeklyIndirect: number;
   last: string | null;
 }
 
 export function emptyLoad(): Record<MuscleId, MuscleLoad> {
   const o = {} as Record<MuscleId, MuscleLoad>;
-  for (const m of MUSCLES) o[m.id] = { sets: 0, weekly: 0, last: null };
+  for (const m of MUSCLES) o[m.id] = { sets: 0, weekly: 0, weeklyDirect: 0, weeklyIndirect: 0, last: null };
   return o;
 }
 
@@ -289,14 +294,23 @@ export function muscleLoadBetween(
       const touch = (m: MuscleId, factor: number) => {
         const o = out[m];
         if (!o) return;
-        if (inRange) o.sets += n * factor;
+        if (inRange) {
+          o.sets += n * factor;
+          if (factor === 1) o.weeklyDirect += n;
+          else o.weeklyIndirect += n * factor;
+        }
         if (w.date <= to && (o.last == null || w.date > o.last)) o.last = w.date;
       };
       exr.primary.forEach((m) => touch(m, 1));
       exr.secondary.forEach((m) => touch(m, 0.5));
     }
   }
-  for (const m of MUSCLES) out[m.id].weekly = out[m.id].sets / weeks;
+  for (const m of MUSCLES) {
+    const o = out[m.id];
+    o.weekly = o.sets / weeks;
+    o.weeklyDirect /= weeks;
+    o.weeklyIndirect /= weeks;
+  }
   return out;
 }
 
@@ -641,4 +655,9 @@ export function matchesExercise(e: Exercise, query: string): boolean {
     [e.name, ...(e.aliases ?? []), ...e.primary.map((m) => MUSCLE_NAME[m]), EQUIPMENT_NAME[e.equipment]].join(' '),
   );
   return words.every((w) => hay.includes(w));
+}
+
+/** Bir hareketin yardımcı kasları, okunur metin olarak. Yoksa boş döner. */
+export function secondaryText(e: Exercise | undefined): string {
+  return (e?.secondary ?? []).map((m) => MUSCLE_NAME[m]).join(', ');
 }

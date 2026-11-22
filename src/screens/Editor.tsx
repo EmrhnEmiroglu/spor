@@ -15,6 +15,7 @@ import {
   fmtNum,
   fmtRir,
   fmtSets,
+  secondaryText,
   sessionsBefore,
   suggest,
   todayStr,
@@ -156,6 +157,7 @@ export function EditorScreen({ workoutId }: { workoutId: string | null }) {
             entry={e}
             name={map.get(e.exerciseId)?.name ?? 'Silinmiş egzersiz'}
             muscles={(map.get(e.exerciseId)?.primary ?? []).map((m) => MUSCLE_NAME[m]).join(', ')}
+            secondary={secondaryText(map.get(e.exerciseId))}
             note={db.exerciseNotes[e.exerciseId] ?? ''}
             before={sessionsBefore(index.get(e.exerciseId), w)}
             increment={db.settings.increment}
@@ -209,6 +211,7 @@ function EntryCard({
   entry,
   name,
   muscles,
+  secondary,
   note,
   before,
   increment,
@@ -228,6 +231,7 @@ function EntryCard({
   entry: WorkoutEntry;
   name: string;
   muscles: string;
+  secondary: string;
   note: string;
   before: Session[];
   increment: number;
@@ -321,6 +325,11 @@ function EntryCard({
             {muscles ? `${muscles} · ` : ''}
             {entry.repMin}–{entry.repMax} tekrar
           </T>
+          {secondary ? (
+            <T v="tiny" numberOfLines={1} style={{ marginTop: 1, fontSize: 11 }}>
+              Yardımcı (yarım set): {secondary}
+            </T>
+          ) : null}
         </Pressable>
         <IconBtn name={menu ? 'chevron-up' : 'settings'} label="Egzersiz seçenekleri" onPress={() => setMenu((m) => !m)} />
       </View>

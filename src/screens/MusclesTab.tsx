@@ -81,19 +81,25 @@ export function MusclesTab() {
   // Seçili kasa bu dönemde set yazan egzersizler.
   const contributors = useMemo(() => {
     if (!sel) return [];
-    const acc = new Map<string, number>();
+    // done: yapılan set sayısı. counted: bu kasa yazılan (yardımcıysa yarısı).
+    const acc = new Map<string, { name: string; direct: boolean; done: number; counted: number }>();
     const all = db.active ? [...db.workouts, db.active] : db.workouts;
     for (const w of all) {
       if (w.date < period.from || w.date > period.to) continue;
       for (const e of w.entries) {
         const exr = map.get(e.exerciseId);
         if (!exr) continue;
-        const f = exr.primary.includes(sel) ? 1 : exr.secondary.includes(sel) ? 0.5 : 0;
-        const n = doneSets(e).length * f;
-        if (n > 0) acc.set(exr.name, (acc.get(exr.name) ?? 0) + n);
+        const direct = exr.primary.includes(sel);
+        if (!direct && !exr.secondary.includes(sel)) continue;
+        const done = doneSets(e).length;
+        if (!done) continue;
+        const cur = acc.get(exr.id) ?? { name: exr.name, direct, done: 0, counted: 0 };
+        cur.done += done;
+        cur.counted += direct ? done : done * 0.5;
+        acc.set(exr.id, cur);
       }
     }
-    return [...acc.entries()].sort((a, b) => b[1] - a[1]);
+    return [...acc.values()].sort((a, b) => Number(b.direct) - Number(a.direct) || b.counted - a.counted);
   }, [sel, db, map, period]);
 
   const unit = period.weeks === 1 ? 'set' : 'set/hafta';
@@ -133,6 +139,11 @@ export function MusclesTab() {
                   Hedef {selTarget.min}–{selTarget.max} · {STATUS[targetStatus(load[sel].weekly, selTarget)].label}
                   {load[sel].last ? ` · son ${relDay(load[sel].last as string).toLocaleLowerCase('tr')}` : ' · henüz çalışılmadı'}
                 </T>
+                {load[sel].weekly > 0 ? (
+                  <T v="tiny" numberOfLines={1}>
+                    {fmtNum(load[sel].weeklyDirect, 1)} doğrudan + {fmtNum(load[sel].weeklyIndirect, 1)} dolaylı
+                  </T>
+                ) : null}
               </View>
               <View style={{ alignItems: 'flex-end' }}>
                 <T v="h2">{fmtNum(load[sel].weekly, 1)}</T>
@@ -179,19 +190,43 @@ export function MusclesTab() {
           />
           <RangePicker />
 
-          <T v="label" style={{ marginTop: 6 }}>Bu dönemde</T>
+          <T v="label" style={{ marginTop: 6 }}>Bu dönemde nereden geldi</T>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <View style={{ flex: 1, backgroundColor: C.surface2, borderRadius: 12, padding: 10 }}>
+              <T v="tiny">Doğrudan</T>
+              <T v="h2" style={{ marginTop: 2 }}>
+                {fmtNum(load[sel].weeklyDirect, 1)} {unit}
+              </T>
+              <T v="tiny" style={{ marginTop: 2 }}>Bu kasın ana kas olduğu hareketler</T>
+            </View>
+            <View style={{ flex: 1, backgroundColor: C.surface2, borderRadius: 12, padding: 10 }}>
+              <T v="tiny">Dolaylı</T>
+              <T v="h2" style={{ marginTop: 2 }}>
+                {fmtNum(load[sel].weeklyIndirect, 1)} {unit}
+              </T>
+              <T v="tiny" style={{ marginTop: 2 }}>Yardımcı olduğu hareketler, yarım sayılır</T>
+            </View>
+          </View>
           {contributors.length ? (
-            <View style={{ gap: 4 }}>
-              {contributors.map(([name, n]) => (
-                <View key={name} style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
-                  <T v="small" style={{ flex: 1 }} numberOfLines={1}>{name}</T>
-                  <T v="small" color={C.text}>{fmtNum(n, 1)} set</T>
+            <View style={{ gap: 8, marginTop: 4 }}>
+              {contributors.map((c) => (
+                <View key={c.name + String(c.direct)} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <T v="small" color={C.text} numberOfLines={1}>{c.name}</T>
+                    <T v="tiny" numberOfLines={1}>
+                      {c.direct ? `Ana kas · ${c.done} set` : `Yardımcı kas · ${c.done} setin yarısı`}
+                    </T>
+                  </View>
+                  <T v="small" color={C.text} style={{ fontWeight: '600' }}>{fmtNum(c.counted, 1)} set</T>
                 </View>
               ))}
             </View>
           ) : (
             <T v="small">Bu dönemde bu kasa set yazılmadı.</T>
           )}
+          <T v="tiny" style={{ lineHeight: 17, marginTop: 2 }}>
+            Örnek: barfikste ana kas kanattır, biceps yardımcıdır. 4 set barfiks kanada 4, bicepse 2 set yazar.
+          </T>
         </Card>
       ) : null}
 

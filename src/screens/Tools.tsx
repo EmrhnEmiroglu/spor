@@ -5,7 +5,7 @@ import { useNav } from '../nav';
 import { Card, Chip, Empty, Field, Icon, NumInput, Screen, T, Tag } from '../ui';
 import { C } from '../theme';
 import { EQUIPMENT_NAME, MUSCLE_NAME } from '../data/muscles';
-import { fmtNum, matchesExercise, platesPerSide } from '../logic';
+import { fmtNum, matchesExercise, platesPerSide, secondaryText } from '../logic';
 import { makeEntry } from '../actions';
 
 /** Antrenmandaki bir egzersizi, aynı kası çalıştıran başka biriyle değiştirir. */
@@ -77,7 +77,8 @@ export function SwapScreen({ workoutId, entryIndex }: { workoutId: string | null
               flexDirection: 'row',
               alignItems: 'center',
               gap: 12,
-              minHeight: 60,
+              minHeight: 66,
+              paddingVertical: 8,
               borderBottomWidth: 1,
               borderBottomColor: C.border,
               opacity: pressed ? 0.6 : 1,
@@ -91,6 +92,11 @@ export function SwapScreen({ workoutId, entryIndex }: { workoutId: string | null
               <T v="tiny" numberOfLines={1} style={{ marginTop: 2 }}>
                 {e.primary.map((m) => MUSCLE_NAME[m]).join(', ')} · {EQUIPMENT_NAME[e.equipment]}
               </T>
+              {e.secondary.length ? (
+                <T v="tiny" numberOfLines={1} style={{ marginTop: 1, fontSize: 11 }}>
+                  Yardımcı: {secondaryText(e)}
+                </T>
+              ) : null}
             </View>
             <Icon name="chevron-right" size={18} color={C.muted} />
           </Pressable>
